@@ -1,0 +1,49 @@
+# Move build artifacts
+build/
+*.abi
+
+# Aptos CLI configuration
+.aptos/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node modules (if using TypeScript/JavaScript for testing or frontend)
+node_modules/
+
+# Test artifacts
+coverage/
+*.coverage
+*.log
+
+# Movement framework specific
+.movement/
+
+# Temporary files
+*.tmp
+*~
+
+# Debug files
+*.debug
+
+# Private keys and sensitive data
+*.key
+*.pem
