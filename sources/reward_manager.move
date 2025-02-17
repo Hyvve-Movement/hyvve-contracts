@@ -20,8 +20,8 @@ module campaign_manager::reward_manager {
         claims: vector<RewardClaim>,
     }
 
-    public fun initialize<CoinType: key>(account: &signer) {
-        move_to(account, RewardStore<CoinType> {
+    fun init_module(account: &signer) {
+        move_to(account, RewardStore<aptos_framework::aptos_coin::AptosCoin> {
             claims: vector::empty(),
         });
     }

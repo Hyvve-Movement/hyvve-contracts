@@ -55,7 +55,7 @@ module campaign_manager::contribution {
         timestamp: u64,
     }
 
-    public fun initialize(account: &signer) {
+    fun init_module(account: &signer) {
         let contribution_store = ContributionStore {
             contributions: vector::empty(),
             contribution_events: account::new_event_handle<ContributionEvent>(account),
@@ -240,7 +240,6 @@ module campaign_manager::contribution {
         false
     }
 
-    // Update the verify_contribution_signature function to use the verifier module
     fun verify_contribution_signature(
         campaign_id: String,
         data_hash: vector<u8>,
@@ -254,7 +253,6 @@ module campaign_manager::contribution {
         campaign_manager::verifier::verify_signature(@campaign_manager, message, signature)
     }
 
-    // Update the verify_verification_signature function to use the verifier module
     fun verify_verification_signature(
         contribution_id: String,
         quality_score: u64,

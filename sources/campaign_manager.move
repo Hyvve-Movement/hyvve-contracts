@@ -73,7 +73,7 @@ module campaign_manager::campaign {
         timestamp: u64,
     }
 
-    public fun initialize(account: &signer) {
+    fun init_module(account: &signer) {
         let campaign_store = CampaignStore {
             campaigns: vector::empty(),
             campaign_creation_events: account::new_event_handle<CampaignCreationEvent>(account),
@@ -132,6 +132,12 @@ module campaign_manager::campaign {
 
         let campaign_store = borrow_global_mut<CampaignStore>(@campaign_manager);
         vector::push_back(&mut campaign_store.campaigns, campaign);
+
+        campaign_state::add_campaign(
+            campaign_id,
+            timestamp::now_seconds(),
+            expiration,
+        );
 
         // Set up escrow for the campaign
         campaign_manager::escrow::create_campaign_escrow<CoinType>(
@@ -441,7 +447,7 @@ module campaign_manager::campaign_tests {
         account::create_account_for_test(signer::address_of(contributor));
         
         // Initialize campaign store
-        campaign::initialize(campaign_admin);
+        campaign::init_module(campaign_admin);
 
         // Create test campaign
         let campaign_id = string::utf8(b"test_campaign_1");
@@ -474,7 +480,6 @@ module campaign_manager::campaign_tests {
             platform_fee,
         );
 
-        // Verify campaign details
         let (
             returned_title,
             returned_description,
@@ -508,7 +513,7 @@ module campaign_manager::campaign_tests {
         // Setup
         timestamp::set_time_has_started_for_testing(campaign_admin);
         account::create_account_for_test(signer::address_of(campaign_admin));
-        campaign::initialize(campaign_admin);
+        campaign::init_module(campaign_admin);
 
         // Attempt to create campaign with invalid price (0)
         campaign::create_campaign<TestCoin>(
@@ -533,7 +538,7 @@ module campaign_manager::campaign_tests {
         // Setup
         timestamp::set_time_has_started_for_testing(campaign_admin);
         account::create_account_for_test(signer::address_of(campaign_admin));
-        campaign::initialize(campaign_admin);
+        campaign::init_module(campaign_admin);
 
         // Create initial campaign
         let campaign_id = string::utf8(b"test_campaign");
@@ -589,7 +594,7 @@ module campaign_manager::campaign_tests {
     public fun test_cancel_campaign(campaign_admin: &signer) {
         timestamp::set_time_has_started_for_testing(campaign_admin);
         account::create_account_for_test(signer::address_of(campaign_admin));
-        campaign::initialize(campaign_admin);
+        campaign::init_module(campaign_admin);
 
         let campaign_id = string::utf8(b"test_campaign");
         campaign::create_campaign<TestCoin>(
@@ -618,7 +623,7 @@ module campaign_manager::campaign_tests {
     public fun test_get_campaign_count(campaign_admin: &signer) {
         timestamp::set_time_has_started_for_testing(campaign_admin);
         account::create_account_for_test(signer::address_of(campaign_admin));
-        campaign::initialize(campaign_admin);
+        campaign::init_module(campaign_admin);
 
         let campaign_id1 = string::utf8(b"campaign1");
         let campaign_id2 = string::utf8(b"campaign2");

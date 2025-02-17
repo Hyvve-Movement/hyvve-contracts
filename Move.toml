@@ -4,7 +4,7 @@ version = '1.0.0'
 authors = ['Hive Data Marketplace']
 
 [addresses]
-campaign_manager = "0xcafe"
+campaign_manager = "_"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "aptos-cli-v1.0.0" }

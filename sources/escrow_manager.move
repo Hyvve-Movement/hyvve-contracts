@@ -59,18 +59,15 @@ module campaign_manager::escrow {
         signer_cap: account::SignerCapability,
     }
 
-    public fun initialize<CoinType: key>(
-        account: &signer,
-        platform_wallet: address,
-    ) {
+    fun init_module(account: &signer) {
         let (escrow_signer, signer_cap) = account::create_resource_account(account, b"escrow");
         move_to(&escrow_signer, EscrowSigner { signer_cap });
 
-        let escrow_store = EscrowStore<CoinType> {
+        let escrow_store = EscrowStore<aptos_framework::aptos_coin::AptosCoin> {
             escrows: vector::empty(),
-            platform_wallet,
-            escrow_events: account::new_event_handle<EscrowEvent<CoinType>>(account),
-            reward_events: account::new_event_handle<RewardEvent<CoinType>>(account),
+            platform_wallet: @campaign_manager, // Default to module publisher
+            escrow_events: account::new_event_handle<EscrowEvent<aptos_framework::aptos_coin::AptosCoin>>(account),
+            reward_events: account::new_event_handle<RewardEvent<aptos_framework::aptos_coin::AptosCoin>>(account),
         };
         move_to(account, escrow_store);
     }
@@ -300,7 +297,7 @@ module campaign_manager::escrow_tests {
         contribution::initialize(contributor);
         verifier::initialize(admin);
         reward_manager::initialize(admin);
-        escrow::initialize<TestCoin>(admin, signer::address_of(platform_wallet));
+        escrow::init_module<TestCoin>(admin);
     }
 
     fun setup_test_campaign(admin: &signer): string::String {

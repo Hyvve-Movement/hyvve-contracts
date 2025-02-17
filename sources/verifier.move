@@ -72,8 +72,7 @@ module campaign_manager::verifier {
         quality_score: u64,
     }
 
-    // Initialize the verifier registry
-    public fun initialize(account: &signer) {
+    fun init_module(account: &signer) {
         let sender = signer::address_of(account);
         let verifier_registry = VerifierRegistry {
             verifiers: vector::empty(),
@@ -81,6 +80,12 @@ module campaign_manager::verifier {
             verifier_events: account::new_event_handle<VerifierEvent>(account),
         };
         move_to(account, verifier_registry);
+
+        // Initialize verifier store in the same init_module
+        move_to(account, VerifierStore {
+            admin: sender,
+            verifier_keys: vector::empty(),
+        });
     }
 
     public entry fun add_verifier(

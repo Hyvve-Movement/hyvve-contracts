@@ -19,7 +19,7 @@ module campaign_manager::campaign_state {
         total_contributions: u64,
     }
 
-    public fun initialize(account: &signer) {
+    fun init_module(account: &signer) {
         move_to(account, CampaignState {
             campaigns: vector::empty(),
         });
