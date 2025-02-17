@@ -268,3 +268,304 @@ module campaign_manager::escrow {
         abort error::not_found(EESCROW_NOT_FOUND)
     }
 } 
+
+#[test_only]
+module campaign_manager::escrow_tests {
+    use std::string;
+    use std::signer;
+    use aptos_framework::account;
+    use aptos_framework::coin::{Self};
+    use aptos_framework::timestamp;
+    use campaign_manager::campaign;
+    use campaign_manager::campaign_state;
+    use campaign_manager::contribution;
+    use campaign_manager::escrow;
+    use campaign_manager::verifier;
+    use campaign_manager::reward_manager;
+
+    struct TestCoin has key { }
+
+    fun setup_test_environment(
+        admin: &signer,
+        contributor: &signer,
+        platform_wallet: &signer
+    ) {
+        timestamp::set_time_has_started_for_testing(admin);
+        account::create_account_for_test(signer::address_of(admin));
+        account::create_account_for_test(signer::address_of(contributor));
+        account::create_account_for_test(signer::address_of(platform_wallet));
+
+        campaign::initialize(admin);
+        campaign_state::initialize(admin);
+        contribution::initialize(contributor);
+        verifier::initialize(admin);
+        reward_manager::initialize(admin);
+        escrow::initialize<TestCoin>(admin, signer::address_of(platform_wallet));
+    }
+
+    fun setup_test_campaign(admin: &signer): string::String {
+        let campaign_id = string::utf8(b"test_campaign");
+        
+        campaign::create_campaign<TestCoin>(
+            admin,
+            campaign_id,
+            string::utf8(b"Test Campaign"),
+            string::utf8(b"Description"),
+            string::utf8(b"Requirements"),
+            string::utf8(b"Criteria"),
+            100, // unit_price
+            1000, // total_budget
+            5, // min_data_count
+            10, // max_data_count
+            timestamp::now_seconds() + 86400, // expiration (1 day)
+            string::utf8(b"ipfs://test"),
+            10, // platform_fee
+        );
+
+        campaign_id
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456, platform = @0x789)]
+    public fun test_create_escrow(
+        admin: &signer,
+        contributor: &signer,
+        platform: &signer
+    ) {
+        setup_test_environment(admin, contributor, platform);
+        let campaign_id = setup_test_campaign(admin);
+
+        // Create escrow
+        escrow::create_campaign_escrow<TestCoin>(
+            admin,
+            campaign_id,
+            1000, // total_amount
+            100,  // unit_reward
+            10,   // platform_fee
+        );
+
+        // Verify escrow info
+        let (owner, total_locked, total_released, unit_reward, platform_fee, is_active) = 
+            escrow::get_escrow_info<TestCoin>(campaign_id);
+
+        assert!(owner == signer::address_of(admin), 0);
+        assert!(total_locked == 1000, 1);
+        assert!(total_released == 0, 2);
+        assert!(unit_reward == 100, 3);
+        assert!(platform_fee == 10, 4);
+        assert!(is_active == true, 5);
+
+        // Verify available balance
+        let available_balance = escrow::get_available_balance<TestCoin>(campaign_id);
+        assert!(available_balance == 1000, 6);
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456, platform = @0x789)]
+    public fun test_release_reward(
+        admin: &signer,
+        contributor: &signer,
+        platform: &signer
+    ) {
+        setup_test_environment(admin, contributor, platform);
+        let campaign_id = setup_test_campaign(admin);
+
+        // Create escrow
+        escrow::create_campaign_escrow<TestCoin>(
+            admin,
+            campaign_id,
+            1000, // total_amount
+            100,  // unit_reward
+            10,   // platform_fee (10 = 0.1%)
+        );
+
+        // Submit contribution
+        let contribution_id = string::utf8(b"test_contribution_1");
+        let data_url = string::utf8(b"ipfs://testdata");
+        let data_hash = vector::empty<u8>();
+        vector::push_back(&mut data_hash, 1);
+        let signature = vector::empty<u8>();
+        vector::push_back(&mut signature, 1);
+        
+        contribution::submit_contribution<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id,
+            data_url,
+            data_hash,
+            signature,
+            80, // quality_score
+        );
+
+        // Release reward
+        escrow::release_reward<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id,
+        );
+
+        // Verify escrow state after reward release
+        let (_, total_locked, total_released, _, _, _) = 
+            escrow::get_escrow_info<TestCoin>(campaign_id);
+
+        assert!(total_released == 100, 0); // Full reward amount
+        assert!(total_locked == 1000, 1);  // Original locked amount unchanged
+
+        // Verify available balance
+        let available_balance = escrow::get_available_balance<TestCoin>(campaign_id);
+        assert!(available_balance == 900, 2); // 1000 - 100
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456, platform = @0x789)]
+    public fun test_refund_remaining(
+        admin: &signer,
+        contributor: &signer,
+        platform: &signer
+    ) {
+        setup_test_environment(admin, contributor, platform);
+        let campaign_id = setup_test_campaign(admin);
+
+        // Create escrow
+        escrow::create_campaign_escrow<TestCoin>(
+            admin,
+            campaign_id,
+            1000, // total_amount
+            100,  // unit_reward
+            10,   // platform_fee
+        );
+
+        // Cancel campaign
+        campaign::cancel_campaign<TestCoin>(admin, campaign_id);
+
+        // Refund remaining amount
+        escrow::refund_remaining<TestCoin>(
+            admin,
+            campaign_id,
+        );
+
+        // Verify escrow state after refund
+        let (_, _, _, _, _, is_active) = escrow::get_escrow_info<TestCoin>(campaign_id);
+        assert!(!is_active, 0);
+
+        // Verify available balance is 0
+        let available_balance = escrow::get_available_balance<TestCoin>(campaign_id);
+        assert!(available_balance == 0, 1);
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456, platform = @0x789)]
+    #[expected_failure(abort_code = 4)]
+    public fun test_refund_active_campaign(
+        admin: &signer,
+        contributor: &signer,
+        platform: &signer
+    ) {
+        setup_test_environment(admin, contributor, platform);
+        let campaign_id = setup_test_campaign(admin);
+
+        // Create escrow
+        escrow::create_campaign_escrow<TestCoin>(
+            admin,
+            campaign_id,
+            1000,
+            100,
+            10,
+        );
+
+        // Attempt to refund while campaign is still active (should fail)
+        escrow::refund_remaining<TestCoin>(
+            admin,
+            campaign_id,
+        );
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456, platform = @0x789)]
+    #[expected_failure(abort_code = 3)]
+    public fun test_unauthorized_refund(
+        admin: &signer,
+        contributor: &signer,
+        platform: &signer
+    ) {
+        setup_test_environment(admin, contributor, platform);
+        let campaign_id = setup_test_campaign(admin);
+
+        // Create escrow
+        escrow::create_campaign_escrow<TestCoin>(
+            admin,
+            campaign_id,
+            1000,
+            100,
+            10,
+        );
+
+        // Cancel campaign
+        campaign::cancel_campaign<TestCoin>(admin, campaign_id);
+
+        // Attempt unauthorized refund (should fail)
+        escrow::refund_remaining<TestCoin>(
+            contributor, // Not the campaign owner
+            campaign_id,
+        );
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456, platform = @0x789)]
+    #[expected_failure(abort_code = 1)]
+    public fun test_insufficient_balance(
+        admin: &signer,
+        contributor: &signer,
+        platform: &signer
+    ) {
+        setup_test_environment(admin, contributor, platform);
+        let campaign_id = setup_test_campaign(admin);
+
+        // Create escrow with minimal balance
+        escrow::create_campaign_escrow<TestCoin>(
+            admin,
+            campaign_id,
+            100, // total_amount = exactly one reward
+            100, // unit_reward
+            10,  // platform_fee
+        );
+
+        // Submit and claim multiple contributions to exceed balance
+        let contribution_id1 = string::utf8(b"contribution1");
+        let contribution_id2 = string::utf8(b"contribution2");
+        let data_url = string::utf8(b"ipfs://testdata");
+        let data_hash = vector::empty<u8>();
+        vector::push_back(&mut data_hash, 1);
+        let signature = vector::empty<u8>();
+        vector::push_back(&mut signature, 1);
+        
+        // Submit first contribution
+        contribution::submit_contribution<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id1,
+            data_url,
+            data_hash,
+            signature,
+            80,
+        );
+
+        // Release first reward
+        escrow::release_reward<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id1,
+        );
+
+        // Attempt to submit and claim second contribution (should fail due to insufficient balance)
+        contribution::submit_contribution<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id2,
+            data_url,
+            data_hash,
+            signature,
+            80,
+        );
+
+        escrow::release_reward<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id2,
+        );
+    }
+} 

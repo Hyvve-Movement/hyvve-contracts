@@ -373,4 +373,202 @@ module campaign_manager::verifier {
     public fun get_result_scores(result: &VerificationResult): &VerificationScores {
         &result.scores
     }
+}
+
+#[test_only]
+module campaign_manager::verifier_tests {
+    use std::string;
+    use std::signer;
+    use std::vector;
+    use aptos_framework::account;
+    use aptos_framework::timestamp;
+    use aptos_framework::ed25519;
+    use campaign_manager::verifier;
+
+    fun setup_test_environment(
+        admin: &signer,
+        verifier_account: &signer
+    ) {
+        timestamp::set_time_has_started_for_testing(admin);
+        account::create_account_for_test(signer::address_of(admin));
+        account::create_account_for_test(signer::address_of(verifier_account));
+
+        verifier::initialize(admin);
+        verifier::initialize_verifier_store(admin);
+    }
+
+    fun generate_test_keypair(): (vector<u8>, vector<u8>) {
+        // Generate a test ED25519 keypair for testing
+        let public_key = x"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let private_key = x"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        (public_key, private_key)
+    }
+
+    #[test(admin = @campaign_manager, verifier = @0x456)]
+    public fun test_add_verifier(
+        admin: &signer,
+        verifier: &signer
+    ) {
+        setup_test_environment(admin, verifier);
+        let (public_key, _) = generate_test_keypair();
+        let verifier_addr = signer::address_of(verifier);
+
+        verifier::add_verifier(admin, verifier_addr, public_key);
+
+        assert!(verifier::is_active_verifier(verifier_addr), 0);
+    }
+
+    #[test(admin = @campaign_manager, verifier = @0x456)]
+    public fun test_add_verifier_key(
+        admin: &signer,
+        verifier: &signer
+    ) {
+        setup_test_environment(admin, verifier);
+        let (public_key, _) = generate_test_keypair();
+
+        verifier::add_verifier_key(admin, public_key);
+
+        let (reputation_score, total_verifications, _) = verifier::get_verifier_info(public_key);
+        assert!(reputation_score == 100, 0); // Initial reputation score
+        assert!(total_verifications == 0, 1); // No verifications yet
+    }
+
+    #[test(admin = @campaign_manager, verifier = @0x456)]
+    public fun test_remove_verifier(
+        admin: &signer,
+        verifier: &signer
+    ) {
+        setup_test_environment(admin, verifier);
+        let (public_key, _) = generate_test_keypair();
+        let verifier_addr = signer::address_of(verifier);
+
+        verifier::add_verifier(admin, verifier_addr, public_key);
+        assert!(verifier::is_active_verifier(verifier_addr), 0);
+
+        verifier::remove_verifier(admin, verifier_addr);
+        assert!(!verifier::is_active_verifier(verifier_addr), 1);
+    }
+
+    #[test(admin = @campaign_manager, verifier = @0x456)]
+    public fun test_verify_contribution(
+        admin: &signer,
+        verifier: &signer
+    ) {
+        setup_test_environment(admin, verifier);
+        let (public_key, _) = generate_test_keypair();
+
+        // Add verifier key
+        verifier::add_verifier_key(admin, public_key);
+
+        // Create test contribution data
+        let campaign_id = string::utf8(b"test_campaign");
+        let data_hash = x"1234567890";
+        let data_url = string::utf8(b"ipfs://testdata");
+        let quality_score: u64 = 80;
+
+        // Create a test signature (in real world this would be properly signed)
+        let signature = vector::empty<u8>();
+        let i = 0;
+        while (i < 64) {
+            vector::push_back(&mut signature, 1);
+            i = i + 1;
+        };
+
+        // Verify contribution
+        let result = verifier::verify_contribution(
+            campaign_id,
+            data_hash,
+            data_url,
+            signature,
+            quality_score,
+        );
+
+        // Note: The verification will fail because we're using dummy signatures
+        assert!(!verifier::is_valid(&result), 0);
+    }
+
+    #[test(admin = @campaign_manager)]
+    public fun test_verification_scores() {
+        let admin = &account::create_signer_for_test(@campaign_manager);
+        setup_test_environment(admin, admin);
+
+        // Test valid scores
+        let scores = verifier::create_verification_scores(80, 85);
+        let (verifier_reputation, quality_score) = verifier::get_scores(&scores);
+        assert!(verifier_reputation == 80, 0);
+        assert!(quality_score == 85, 1);
+        assert!(verifier::is_sufficient_for_reward(&scores), 2);
+
+        // Test score validation
+        let scores_low = verifier::create_verification_scores(70, 70);
+        assert!(verifier::is_sufficient_for_reward(&scores_low), 3);
+
+        let scores_insufficient = verifier::create_verification_scores(69, 80);
+        assert!(!verifier::is_sufficient_for_reward(&scores_insufficient), 4);
+    }
+
+    #[test(admin = @campaign_manager)]
+    #[expected_failure(abort_code = 12)]
+    public fun test_invalid_score() {
+        let admin = &account::create_signer_for_test(@campaign_manager);
+        setup_test_environment(admin, admin);
+
+        // Attempt to create scores with invalid value (>100)
+        verifier::create_verification_scores(101, 80);
+    }
+
+    #[test(admin = @campaign_manager, verifier = @0x456)]
+    #[expected_failure(abort_code = 3)]
+    public fun test_duplicate_verifier(
+        admin: &signer,
+        verifier: &signer
+    ) {
+        setup_test_environment(admin, verifier);
+        let (public_key, _) = generate_test_keypair();
+        let verifier_addr = signer::address_of(verifier);
+
+        // Add verifier first time
+        verifier::add_verifier(admin, verifier_addr, public_key);
+
+        // Attempt to add same verifier again (should fail)
+        verifier::add_verifier(admin, verifier_addr, public_key);
+    }
+
+    #[test(admin = @campaign_manager, verifier = @0x456, unauthorized = @0x789)]
+    #[expected_failure(abort_code = 1)]
+    public fun test_unauthorized_verifier_removal(
+        admin: &signer,
+        verifier: &signer,
+        unauthorized: &signer
+    ) {
+        setup_test_environment(admin, verifier);
+        let (public_key, _) = generate_test_keypair();
+        let verifier_addr = signer::address_of(verifier);
+
+        // Add verifier
+        verifier::add_verifier(admin, verifier_addr, public_key);
+
+        // Create unauthorized account
+        account::create_account_for_test(signer::address_of(unauthorized));
+
+        // Attempt unauthorized removal (should fail)
+        verifier::remove_verifier(unauthorized, verifier_addr);
+    }
+
+    #[test(admin = @campaign_manager)]
+    public fun test_update_reputation() {
+        let admin = &account::create_signer_for_test(@campaign_manager);
+        setup_test_environment(admin, admin);
+        let (public_key, _) = generate_test_keypair();
+
+        // Add verifier key
+        verifier::add_verifier_key(admin, public_key);
+
+        // Update reputation
+        verifier::update_reputation(admin, public_key, 90);
+
+        // Verify updated reputation
+        let (reputation_score, _, _) = verifier::get_verifier_info(public_key);
+        assert!(reputation_score == 90, 0);
+    }
 } 

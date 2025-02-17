@@ -421,3 +421,248 @@ module campaign_manager::campaign {
         (total_count, active_count)
     }
 }
+
+#[test_only]
+module campaign_manager::campaign_tests {
+    use std::string;
+    use std::signer;
+    use aptos_framework::account;
+    use aptos_framework::coin;
+    use aptos_framework::timestamp;
+    use campaign_manager::campaign;
+
+    struct TestCoin has key { }
+
+    #[test(campaign_admin = @campaign_manager, contributor = @0x456)]
+    public fun test_create_campaign(campaign_admin: &signer, contributor: &signer) {
+        // Setup test environment
+        timestamp::set_time_has_started_for_testing(campaign_admin);
+        account::create_account_for_test(signer::address_of(campaign_admin));
+        account::create_account_for_test(signer::address_of(contributor));
+        
+        // Initialize campaign store
+        campaign::initialize(campaign_admin);
+
+        // Create test campaign
+        let campaign_id = string::utf8(b"test_campaign_1");
+        let title = string::utf8(b"Test Campaign");
+        let description = string::utf8(b"Test Description");
+        let data_requirements = string::utf8(b"Test Requirements");
+        let quality_criteria = string::utf8(b"Test Criteria");
+        let unit_price = 100;
+        let total_budget = 1000;
+        let min_data_count = 5;
+        let max_data_count = 10;
+        let expiration = timestamp::now_seconds() + 86400; // 1 day from now
+        let metadata_uri = string::utf8(b"ipfs://test");
+        let platform_fee = 10;
+
+        // Create campaign
+        campaign::create_campaign<TestCoin>(
+            campaign_admin,
+            campaign_id,
+            title,
+            description,
+            data_requirements,
+            quality_criteria,
+            unit_price,
+            total_budget,
+            min_data_count,
+            max_data_count,
+            expiration,
+            metadata_uri,
+            platform_fee,
+        );
+
+        // Verify campaign details
+        let (
+            returned_title,
+            returned_description,
+            returned_requirements,
+            returned_criteria,
+            returned_unit_price,
+            returned_budget,
+            returned_min_count,
+            returned_max_count,
+            returned_expiration,
+            is_active,
+            returned_metadata
+        ) = campaign::get_campaign_details(@campaign_manager, campaign_id);
+
+        assert!(returned_title == title, 0);
+        assert!(returned_description == description, 1);
+        assert!(returned_requirements == data_requirements, 2);
+        assert!(returned_criteria == quality_criteria, 3);
+        assert!(returned_unit_price == unit_price, 4);
+        assert!(returned_budget == total_budget, 5);
+        assert!(returned_min_count == min_data_count, 6);
+        assert!(returned_max_count == max_data_count, 7);
+        assert!(returned_expiration == expiration, 8);
+        assert!(is_active == true, 9);
+        assert!(returned_metadata == metadata_uri, 10);
+    }
+
+    #[test(campaign_admin = @campaign_manager)]
+    #[expected_failure(abort_code = 2)]
+    public fun test_create_campaign_invalid_price(campaign_admin: &signer) {
+        // Setup
+        timestamp::set_time_has_started_for_testing(campaign_admin);
+        account::create_account_for_test(signer::address_of(campaign_admin));
+        campaign::initialize(campaign_admin);
+
+        // Attempt to create campaign with invalid price (0)
+        campaign::create_campaign<TestCoin>(
+            campaign_admin,
+            string::utf8(b"test_campaign"),
+            string::utf8(b"title"),
+            string::utf8(b"description"),
+            string::utf8(b"requirements"),
+            string::utf8(b"criteria"),
+            0, // Invalid price
+            1000,
+            5,
+            10,
+            timestamp::now_seconds() + 86400,
+            string::utf8(b"metadata"),
+            10,
+        );
+    }
+
+    #[test(campaign_admin = @campaign_manager)]
+    public fun test_update_campaign(campaign_admin: &signer) {
+        // Setup
+        timestamp::set_time_has_started_for_testing(campaign_admin);
+        account::create_account_for_test(signer::address_of(campaign_admin));
+        campaign::initialize(campaign_admin);
+
+        // Create initial campaign
+        let campaign_id = string::utf8(b"test_campaign");
+        campaign::create_campaign<TestCoin>(
+            campaign_admin,
+            campaign_id,
+            string::utf8(b"title"),
+            string::utf8(b"description"),
+            string::utf8(b"requirements"),
+            string::utf8(b"criteria"),
+            100,
+            1000,
+            5,
+            10,
+            timestamp::now_seconds() + 86400,
+            string::utf8(b"metadata"),
+            10,
+        );
+
+        // Update campaign
+        let new_requirements = string::utf8(b"new requirements");
+        let new_criteria = string::utf8(b"new criteria");
+        let new_expiration = timestamp::now_seconds() + 172800; // 2 days
+
+        campaign::update_campaign(
+            campaign_admin,
+            campaign_id,
+            new_requirements,
+            new_criteria,
+            new_expiration,
+        );
+
+        let (
+            _title,
+            _description,
+            returned_requirements,
+            returned_criteria,
+            _unit_price,
+            _budget,
+            _min_count,
+            _max_count,
+            returned_expiration,
+            _is_active,
+            _metadata
+        ) = campaign::get_campaign_details(@campaign_manager, campaign_id);
+
+        assert!(returned_requirements == new_requirements, 0);
+        assert!(returned_criteria == new_criteria, 1);
+        assert!(returned_expiration == new_expiration, 2);
+    }
+
+    #[test(campaign_admin = @campaign_manager)]
+    public fun test_cancel_campaign(campaign_admin: &signer) {
+        timestamp::set_time_has_started_for_testing(campaign_admin);
+        account::create_account_for_test(signer::address_of(campaign_admin));
+        campaign::initialize(campaign_admin);
+
+        let campaign_id = string::utf8(b"test_campaign");
+        campaign::create_campaign<TestCoin>(
+            campaign_admin,
+            campaign_id,
+            string::utf8(b"title"),
+            string::utf8(b"description"),
+            string::utf8(b"requirements"),
+            string::utf8(b"criteria"),
+            100,
+            1000,
+            5,
+            10,
+            timestamp::now_seconds() + 86400,
+            string::utf8(b"metadata"),
+            10,
+        );
+
+        campaign::cancel_campaign<TestCoin>(campaign_admin, campaign_id);
+
+        let (is_active, _, _) = campaign::get_campaign_status(@campaign_manager, campaign_id);
+        assert!(!is_active, 0);
+    }
+
+    #[test(campaign_admin = @campaign_manager)]
+    public fun test_get_campaign_count(campaign_admin: &signer) {
+        timestamp::set_time_has_started_for_testing(campaign_admin);
+        account::create_account_for_test(signer::address_of(campaign_admin));
+        campaign::initialize(campaign_admin);
+
+        let campaign_id1 = string::utf8(b"campaign1");
+        let campaign_id2 = string::utf8(b"campaign2");
+        
+        campaign::create_campaign<TestCoin>(
+            campaign_admin,
+            campaign_id1,
+            string::utf8(b"title1"),
+            string::utf8(b"description1"),
+            string::utf8(b"requirements1"),
+            string::utf8(b"criteria1"),
+            100,
+            1000,
+            5,
+            10,
+            timestamp::now_seconds() + 86400,
+            string::utf8(b"metadata1"),
+            10,
+        );
+
+        campaign::create_campaign<TestCoin>(
+            campaign_admin,
+            campaign_id2,
+            string::utf8(b"title2"),
+            string::utf8(b"description2"),
+            string::utf8(b"requirements2"),
+            string::utf8(b"criteria2"),
+            200,
+            2000,
+            10,
+            20,
+            timestamp::now_seconds() + 86400,
+            string::utf8(b"metadata2"),
+            10,
+        );
+
+        let (total_count, active_count) = campaign::get_campaign_count(@campaign_manager);
+        assert!(total_count == 2, 0);
+        assert!(active_count == 2, 1);
+
+        campaign::cancel_campaign<TestCoin>(campaign_admin, campaign_id1);
+
+        let (total_count, active_count) = campaign::get_campaign_count(@campaign_manager);
+        assert!(total_count == 2, 2);
+        assert!(active_count == 1, 3);
+    }
+}

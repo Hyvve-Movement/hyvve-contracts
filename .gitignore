@@ -1,9 +1,12 @@
 # Move build artifacts
 build/
 *.abi
+*.mv
+*.mvsm
 
 # Aptos CLI configuration
 .aptos/
+.movement/
 
 # IDE files
 .idea/
@@ -34,12 +37,10 @@ coverage/
 *.coverage
 *.log
 
-# Movement framework specific
-.movement/
-
 # Temporary files
 *.tmp
 *~
+*.bak
 
 # Debug files
 *.debug
@@ -47,3 +48,15 @@ coverage/
 # Private keys and sensitive data
 *.key
 *.pem
+*.secret
+
+# Build configuration backups
+Move.toml.bak
+
+# Source maps and bytecode
+*.mvsm
+bytecode_modules/
+source_maps/
+
+# Dependencies
+dependencies/

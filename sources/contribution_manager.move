@@ -326,4 +326,263 @@ module campaign_manager::contribution {
         };
         abort error::not_found(ECONTRIBUTION_NOT_FOUND)
     }
+}
+
+#[test_only]
+module campaign_manager::contribution_tests {
+    use std::string;
+    use std::signer;
+    use std::vector;
+    use aptos_framework::account;
+    use aptos_framework::timestamp;
+    use campaign_manager::campaign;
+    use campaign_manager::contribution;
+    use campaign_manager::campaign_state;
+    use campaign_manager::verifier;
+
+    struct TestCoin has key { }
+
+    fun setup_test_environment(
+        admin: &signer,
+        contributor: &signer,
+        verifier_account: &signer
+    ) {
+        timestamp::set_time_has_started_for_testing(admin);
+        account::create_account_for_test(signer::address_of(admin));
+        account::create_account_for_test(signer::address_of(contributor));
+        account::create_account_for_test(signer::address_of(verifier_account));
+
+        campaign::initialize(admin);
+        contribution::initialize(contributor);
+        campaign_state::initialize(admin);
+        verifier::initialize(admin);
+    }
+
+    fun setup_test_campaign(admin: &signer): string::String {
+        let campaign_id = string::utf8(b"test_campaign");
+        
+        campaign::create_campaign<TestCoin>(
+            admin,
+            campaign_id,
+            string::utf8(b"Test Campaign"),
+            string::utf8(b"Description"),
+            string::utf8(b"Requirements"),
+            string::utf8(b"Criteria"),
+            100, // unit_price
+            1000, // total_budget
+            5, // min_data_count
+            10, // max_data_count
+            timestamp::now_seconds() + 86400, // expiration (1 day)
+            string::utf8(b"ipfs://test"),
+            10, // platform_fee
+        );
+
+        campaign_id
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456, verifier = @0x789)]
+    public fun test_submit_contribution(
+        admin: &signer,
+        contributor: &signer,
+        verifier: &signer
+    ) {
+        setup_test_environment(admin, contributor, verifier);
+        let campaign_id = setup_test_campaign(admin);
+
+        // Create test data
+        let contribution_id = string::utf8(b"test_contribution_1");
+        let data_url = string::utf8(b"ipfs://testdata");
+        let data_hash = vector::empty<u8>();
+        vector::push_back(&mut data_hash, 1);
+        let signature = vector::empty<u8>();
+        vector::push_back(&mut signature, 1);
+        let quality_score = 80;
+
+        contribution::submit_contribution<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id,
+            data_url,
+            data_hash,
+            signature,
+            quality_score,
+        );
+
+        let submitted_contribution = contribution::get_contribution_details(
+            signer::address_of(contributor),
+            contribution_id
+        );
+
+        assert!(submitted_contribution.contribution_id == contribution_id, 0);
+        assert!(submitted_contribution.campaign_id == campaign_id, 1);
+        assert!(submitted_contribution.contributor == signer::address_of(contributor), 2);
+        assert!(submitted_contribution.data_url == data_url, 3);
+        assert!(submitted_contribution.data_hash == data_hash, 4);
+        assert!(submitted_contribution.is_verified == true, 5);
+        assert!(submitted_contribution.reward_claimed == false, 6);
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456, verifier = @0x789)]
+    public fun test_verify_contribution(
+        admin: &signer,
+        contributor: &signer,
+        verifier: &signer
+    ) {
+        setup_test_environment(admin, contributor, verifier);
+        let campaign_id = setup_test_campaign(admin);
+
+        // Register verifier
+        verifier::register_verifier(verifier, string::utf8(b"Test Verifier"), 90);
+
+        // Submit initial contribution
+        let contribution_id = string::utf8(b"test_contribution_1");
+        let data_url = string::utf8(b"ipfs://testdata");
+        let data_hash = vector::empty<u8>();
+        vector::push_back(&mut data_hash, 1);
+        let signature = vector::empty<u8>();
+        vector::push_back(&mut signature, 1);
+        
+        contribution::submit_contribution<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id,
+            data_url,
+            data_hash,
+            signature,
+            80,
+        );
+
+        // Create verification signature
+        let verifier_signature = vector::empty<u8>();
+        vector::push_back(&mut verifier_signature, 1);
+
+        // Verify contribution
+        contribution::verify_contribution<TestCoin>(
+            verifier,
+            contribution_id,
+            90, // quality_score
+            verifier_signature,
+        );
+
+        // Check contribution status
+        let verified_contribution = contribution::get_contribution_details(
+            signer::address_of(contributor),
+            contribution_id
+        );
+
+        assert!(verified_contribution.is_verified == true, 0);
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456)]
+    public fun test_claim_reward(
+        admin: &signer,
+        contributor: &signer
+    ) {
+        setup_test_environment(admin, contributor, admin);
+        let campaign_id = setup_test_campaign(admin);
+
+        // Submit contribution
+        let contribution_id = string::utf8(b"test_contribution_1");
+        let data_url = string::utf8(b"ipfs://testdata");
+        let data_hash = vector::empty<u8>();
+        vector::push_back(&mut data_hash, 1);
+        let signature = vector::empty<u8>();
+        vector::push_back(&mut signature, 1);
+        
+        contribution::submit_contribution<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id,
+            data_url,
+            data_hash,
+            signature,
+            80,
+        );
+
+        // Claim reward
+        contribution::claim_reward<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id,
+        );
+
+        // Verify reward is claimed
+        let contribution_after_claim = contribution::get_contribution_details(
+            signer::address_of(contributor),
+            contribution_id
+        );
+
+        assert!(contribution_after_claim.reward_claimed == true, 0);
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456)]
+    #[expected_failure(abort_code = 4)]
+    public fun test_duplicate_contribution(
+        admin: &signer,
+        contributor: &signer
+    ) {
+        setup_test_environment(admin, contributor, admin);
+        let campaign_id = setup_test_campaign(admin);
+
+        // Create test data
+        let contribution_id = string::utf8(b"test_contribution_1");
+        let data_url = string::utf8(b"ipfs://testdata");
+        let data_hash = vector::empty<u8>();
+        vector::push_back(&mut data_hash, 1);
+        let signature = vector::empty<u8>();
+        vector::push_back(&mut signature, 1);
+        
+        // Submit first contribution
+        contribution::submit_contribution<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id,
+            data_url,
+            data_hash,
+            signature,
+            80,
+        );
+
+        // Attempt to submit duplicate contribution (should fail)
+        contribution::submit_contribution<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id,
+            data_url,
+            data_hash,
+            signature,
+            80,
+        );
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456)]
+    #[expected_failure(abort_code = 2)]
+    public fun test_submit_to_inactive_campaign(
+        admin: &signer,
+        contributor: &signer
+    ) {
+        setup_test_environment(admin, contributor, admin);
+        let campaign_id = setup_test_campaign(admin);
+
+        // Cancel campaign
+        campaign::cancel_campaign<TestCoin>(admin, campaign_id);
+
+        // Attempt to submit contribution to cancelled campaign (should fail)
+        let contribution_id = string::utf8(b"test_contribution_1");
+        let data_url = string::utf8(b"ipfs://testdata");
+        let data_hash = vector::empty<u8>();
+        vector::push_back(&mut data_hash, 1);
+        let signature = vector::empty<u8>();
+        vector::push_back(&mut signature, 1);
+        
+        contribution::submit_contribution<TestCoin>(
+            contributor,
+            campaign_id,
+            contribution_id,
+            data_url,
+            data_hash,
+            signature,
+            80,
+        );
+    }
 } 
