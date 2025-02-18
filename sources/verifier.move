@@ -88,6 +88,16 @@ module campaign_manager::verifier {
         });
     }
 
+    public entry fun initialize(account: &signer) {
+        let sender = signer::address_of(account);
+        let verifier_registry = VerifierRegistry {
+            verifiers: vector::empty(),
+            admin: sender,
+            verifier_events: account::new_event_handle<VerifierEvent>(account),
+        };
+        move_to(account, verifier_registry);
+    }
+
     public entry fun add_verifier(
         admin: &signer,
         verifier_address: address,

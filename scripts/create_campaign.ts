@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const CAMPAIGN_MANAGER_ADDRESS = process.env.CAMPAIGN_MANAGER_ADDRESS || '';
-const NODE_URL = 'https://aptos.testnet.bardock.movementlabs.xyz/v1';
+const NODE_URL = 'https://aptos.testnet.porto.movementlabs.xyz/v1';
 
 async function main() {
   try {

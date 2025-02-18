@@ -1,0 +1,5 @@
+npx ts-node scripts/register_verifier.ts
+npx ts-node scripts/check_verifier.ts
+npx ts-node scripts/register_verifier_key.ts
+npx ts-node scripts/create_campaign.ts
+npx ts-node scripts/submit_contribution.ts test_campaign_1 https://example.com/data.json 100

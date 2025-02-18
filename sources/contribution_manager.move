@@ -19,6 +19,7 @@ module campaign_manager::contribution {
     const ECONTRIBUTION_ALREADY_VERIFIED: u64 = 6;
     const EVERIFIER_LOW_REPUTATION: u64 = 7;
     const ENOT_CONTRIBUTOR: u64 = 8;
+    const ENOT_VERIFIER: u64 = 9;
 
     struct Contribution has store, copy {
         contribution_id: String,
@@ -83,7 +84,7 @@ module campaign_manager::contribution {
 
         // Verify contribution hasn't been submitted before
         assert!(
-            !contribution_exists(sender, contribution_id),
+            !contribution_exists(contribution_id),
             error::already_exists(EDUPLICATE_CONTRIBUTION)
         );
 
@@ -93,6 +94,12 @@ module campaign_manager::contribution {
             data_url,
             signature,
             quality_score
+        );
+        
+        // Verify the contribution signature using contributor's address
+        assert!(
+            verify_contribution_signature(campaign_id, data_hash, sender, signature),
+            error::invalid_argument(EINVALID_SIGNATURE)
         );
         
         assert!(verifier::is_valid(&result), error::invalid_argument(EINVALID_SIGNATURE));
@@ -111,7 +118,7 @@ module campaign_manager::contribution {
             reward_claimed: false,
         };
 
-        let contribution_store = borrow_global_mut<ContributionStore>(sender);
+        let contribution_store = borrow_global_mut<ContributionStore>(@campaign_manager);
         vector::push_back(&mut contribution_store.contributions, contribution);
 
         // Increment contribution count in campaign
@@ -153,10 +160,10 @@ module campaign_manager::contribution {
         // Verify that the sender is an authorized verifier
         assert!(
             campaign_manager::verifier::is_active_verifier(sender),
-            error::permission_denied(ENOT_CONTRIBUTOR)
+            error::permission_denied(ENOT_VERIFIER)
         );
         
-        let contribution_store = borrow_global_mut<ContributionStore>(sender);
+        let contribution_store = borrow_global_mut<ContributionStore>(@campaign_manager);
         let len = vector::length(&contribution_store.contributions);
         let i = 0;
         while (i < len) {
@@ -164,9 +171,9 @@ module campaign_manager::contribution {
             if (contribution.contribution_id == contribution_id) {
                 assert!(!contribution.is_verified, error::invalid_state(ECONTRIBUTION_ALREADY_VERIFIED));
                 
-                // Verify the verification signature
+                // Verify the verification signature using verifier's address
                 assert!(
-                    verify_verification_signature(contribution_id, quality_score, verifier_signature),
+                    verify_verification_signature(contribution_id, quality_score, sender, verifier_signature),
                     error::invalid_argument(EINVALID_SIGNATURE)
                 );
 
@@ -202,10 +209,9 @@ module campaign_manager::contribution {
     }
 
     public fun get_contribution_details(
-        contributor_address: address,
         contribution_id: String
     ): Contribution acquires ContributionStore {
-        let contribution_store = borrow_global<ContributionStore>(contributor_address);
+        let contribution_store = borrow_global<ContributionStore>(@campaign_manager);
         let len = vector::length(&contribution_store.contributions);
         let i = 0;
         while (i < len) {
@@ -220,14 +226,9 @@ module campaign_manager::contribution {
 
     // Helper function to check if a contribution already exists
     fun contribution_exists(
-        contributor: address,
         contribution_id: String
     ): bool acquires ContributionStore {
-        if (!exists<ContributionStore>(contributor)) {
-            return false
-        };
-        
-        let contribution_store = borrow_global<ContributionStore>(contributor);
+        let contribution_store = borrow_global<ContributionStore>(@campaign_manager);
         let len = vector::length(&contribution_store.contributions);
         let i = 0;
         while (i < len) {
@@ -243,6 +244,7 @@ module campaign_manager::contribution {
     fun verify_contribution_signature(
         campaign_id: String,
         data_hash: vector<u8>,
+        contributor: address,
         signature: vector<u8>
     ): bool {
         let message = vector::empty<u8>();
@@ -250,12 +252,14 @@ module campaign_manager::contribution {
         vector::append(&mut message, campaign_id_bytes);
         vector::append(&mut message, data_hash);
         
-        campaign_manager::verifier::verify_signature(@campaign_manager, message, signature)
+        // Verify using contributor's address
+        campaign_manager::verifier::verify_signature(contributor, message, signature)
     }
 
     fun verify_verification_signature(
         contribution_id: String,
         quality_score: u64,
+        verifier: address,
         signature: vector<u8>
     ): bool {
         let message = vector::empty<u8>();
@@ -267,14 +271,14 @@ module campaign_manager::contribution {
         vector::push_back(&mut score_bytes, (quality_score as u8));
         vector::append(&mut message, score_bytes);
         
-        campaign_manager::verifier::verify_signature(@campaign_manager, message, signature)
+        // Verify using verifier's address
+        campaign_manager::verifier::verify_signature(verifier, message, signature)
     }
 
     public fun mark_reward_claimed(
-        contributor_address: address,
         contribution_id: String
     ): bool acquires ContributionStore {
-        let contribution_store = borrow_global_mut<ContributionStore>(contributor_address);
+        let contribution_store = borrow_global_mut<ContributionStore>(@campaign_manager);
         let len = vector::length(&contribution_store.contributions);
         let i = 0;
         while (i < len) {
@@ -298,12 +302,13 @@ module campaign_manager::contribution {
     ) acquires ContributionStore {
         let sender = signer::address_of(account);
         
-        let contribution_store = borrow_global_mut<ContributionStore>(sender);
+        let contribution_store = borrow_global_mut<ContributionStore>(@campaign_manager);
         let len = vector::length(&contribution_store.contributions);
         let i = 0;
         while (i < len) {
             let contribution = vector::borrow_mut(&mut contribution_store.contributions, i);
             if (contribution.contribution_id == contribution_id) {
+                assert!(contribution.contributor == sender, error::permission_denied(ENOT_CONTRIBUTOR));
                 assert!(contribution.is_verified, error::invalid_state(EINVALID_CONTRIBUTION));
                 assert!(!contribution.reward_claimed, error::invalid_state(ECONTRIBUTION_ALREADY_VERIFIED));
                 
@@ -323,6 +328,12 @@ module campaign_manager::contribution {
             i = i + 1;
         };
         abort error::not_found(ECONTRIBUTION_NOT_FOUND)
+    }
+
+    #[view]
+    public fun get_contribution_store(): vector<Contribution> acquires ContributionStore {
+        let contribution_store = borrow_global<ContributionStore>(@campaign_manager);
+        contribution_store.contributions
     }
 }
 
@@ -407,7 +418,6 @@ module campaign_manager::contribution_tests {
         );
 
         let submitted_contribution = contribution::get_contribution_details(
-            signer::address_of(contributor),
             contribution_id
         );
 
@@ -464,7 +474,6 @@ module campaign_manager::contribution_tests {
 
         // Check contribution status
         let verified_contribution = contribution::get_contribution_details(
-            signer::address_of(contributor),
             contribution_id
         );
 
@@ -506,7 +515,6 @@ module campaign_manager::contribution_tests {
 
         // Verify reward is claimed
         let contribution_after_claim = contribution::get_contribution_details(
-            signer::address_of(contributor),
             contribution_id
         );
 
