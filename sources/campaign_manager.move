@@ -39,7 +39,7 @@ module campaign_manager::campaign {
         is_active: bool,
         total_contributions: u64,
         metadata_uri: String,     // IPFS/Arweave URI for additional metadata
-        escrow_setup: bool,       // Track if escrow is set up
+        escrow_setup: bool,       // Track if escrow is set up 
     }
 
     struct CampaignStore has key {
