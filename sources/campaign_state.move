@@ -17,6 +17,7 @@ module campaign_manager::campaign_state {
         end_time: u64,
         is_active: bool,
         total_contributions: u64,
+        owner: address,
     }
 
     fun init_module(account: &signer) {
@@ -46,6 +47,7 @@ module campaign_manager::campaign_state {
         campaign_id: String,
         start_time: u64,
         end_time: u64,
+        owner: address,
     ) acquires CampaignState {
         let state = borrow_global_mut<CampaignState>(@campaign_manager);
         let campaign = Campaign {
@@ -54,6 +56,7 @@ module campaign_manager::campaign_state {
             end_time,
             is_active: true,
             total_contributions: 0,
+            owner,
         };
         vector::push_back(&mut state.campaigns, campaign);
     }
@@ -82,6 +85,20 @@ module campaign_manager::campaign_state {
             if (campaign.campaign_id == campaign_id) {
                 campaign.is_active = false;
                 return
+            };
+            i = i + 1;
+        };
+        abort error::not_found(ECAMPAIGN_NOT_FOUND)
+    }
+
+    public fun get_campaign_owner(campaign_id: String): address acquires CampaignState {
+        let campaign_state = borrow_global<CampaignState>(@campaign_manager);
+        let len = vector::length(&campaign_state.campaigns);
+        let i = 0;
+        while (i < len) {
+            let campaign = vector::borrow(&campaign_state.campaigns, i);
+            if (campaign.campaign_id == campaign_id) {
+                return campaign.owner
             };
             i = i + 1;
         };

@@ -10,6 +10,7 @@ module campaign_manager::campaign {
     use campaign_manager::campaign_state;
     use campaign_manager::escrow;
     use campaign_manager::contribution;
+    use campaign_manager::reputation;
 
     /// Error codes
     const EINVALID_REWARD_POOL: u64 = 1;
@@ -24,6 +25,15 @@ module campaign_manager::campaign {
     const ECAMPAIGN_ALREADY_EXISTS: u64 = 10;
     const ENOT_OWNER: u64 = 11;
     const ECAMPAIGN_ACTIVE: u64 = 12;
+    const EUSERNAME_ALREADY_TAKEN: u64 = 13;
+    const EUSERNAME_TOO_LONG: u64 = 14;
+    const EUSERNAME_ALREADY_SET: u64 = 15;
+    const EUSERNAME_EDIT_LIMIT_REACHED: u64 = 16;
+    const ENO_USERNAME: u64 = 17;
+
+    // Username constraints
+    const MAX_USERNAME_LENGTH: u64 = 32;
+    const MAX_USERNAME_EDITS: u64 = 2;
 
     struct Campaign has store, copy {
         campaign_id: String,
@@ -75,6 +85,16 @@ module campaign_manager::campaign {
         timestamp: u64,
     }
 
+    struct UsernameStore has key {
+        usernames: vector<UsernameEntry>
+    }
+
+    struct UsernameEntry has store, drop {
+        address: address,
+        username: vector<u8>,
+        edit_count: u64
+    }
+
     fun init_module(account: &signer) {
         let campaign_store = CampaignStore {
             campaigns: vector::empty(),
@@ -83,6 +103,11 @@ module campaign_manager::campaign {
             campaign_events: account::new_event_handle<CampaignEvent>(account),
         };
         move_to(account, campaign_store);
+
+        // Initialize username store
+        move_to(account, UsernameStore {
+            usernames: vector::empty<UsernameEntry>()
+        });
     }
 
     public entry fun create_campaign<CoinType: key>(
@@ -102,6 +127,9 @@ module campaign_manager::campaign {
         encryption_pub_key: vector<u8>
     ) acquires CampaignStore {
         let sender = signer::address_of(account);
+        
+        // Initialize reputation store for new campaign creators
+        reputation::ensure_reputation_store_exists(account);
         
         // Validate inputs
         assert!(unit_price > 0, error::invalid_argument(EINVALID_UNIT_PRICE));
@@ -141,6 +169,7 @@ module campaign_manager::campaign {
             campaign_id,
             timestamp::now_seconds(),
             expiration,
+            sender,
         );
 
         // Set up escrow for the campaign
@@ -556,6 +585,101 @@ module campaign_manager::campaign {
             i = i + 1;
         };
         (total_count, active_count)
+    }
+
+    public entry fun set_username(account: &signer, username: vector<u8>) acquires UsernameStore {
+        let sender = signer::address_of(account);
+        let username_store = borrow_global_mut<UsernameStore>(@campaign_manager);
+        
+        // Check username length
+        assert!(vector::length(&username) <= MAX_USERNAME_LENGTH, error::invalid_argument(EUSERNAME_TOO_LONG));
+        
+        // Check if username is already taken
+        let len = vector::length(&username_store.usernames);
+        let i = 0;
+        while (i < len) {
+            let entry = vector::borrow(&username_store.usernames, i);
+            if (entry.username == username) {
+                abort error::already_exists(EUSERNAME_ALREADY_TAKEN)
+            };
+            if (entry.address == sender) {
+                abort error::already_exists(EUSERNAME_ALREADY_SET)
+            };
+            i = i + 1;
+        };
+        
+        // Add new username
+        let entry = UsernameEntry {
+            address: sender,
+            username,
+            edit_count: 0
+        };
+        vector::push_back(&mut username_store.usernames, entry);
+    }
+
+    public entry fun edit_username(account: &signer, new_username: vector<u8>) acquires UsernameStore {
+        let sender = signer::address_of(account);
+        let username_store = borrow_global_mut<UsernameStore>(@campaign_manager);
+        
+        // Check username length
+        assert!(vector::length(&new_username) <= MAX_USERNAME_LENGTH, error::invalid_argument(EUSERNAME_TOO_LONG));
+        
+        // Check if new username is already taken by someone else
+        let len = vector::length(&username_store.usernames);
+        let i = 0;
+        while (i < len) {
+            let entry = vector::borrow(&username_store.usernames, i);
+            if (entry.username == new_username && entry.address != sender) {
+                abort error::already_exists(EUSERNAME_ALREADY_TAKEN)
+            };
+            i = i + 1;
+        };
+        
+        // Find and update existing username
+        i = 0;
+        while (i < len) {
+            let entry = vector::borrow_mut(&mut username_store.usernames, i);
+            if (entry.address == sender) {
+                // Check edit limit
+                assert!(entry.edit_count < MAX_USERNAME_EDITS, error::invalid_state(EUSERNAME_EDIT_LIMIT_REACHED));
+                entry.username = new_username;
+                entry.edit_count = entry.edit_count + 1;
+                return
+            };
+            i = i + 1;
+        };
+        // If we get here, user hasn't set a username yet
+        abort error::not_found(ENO_USERNAME)
+    }
+
+    #[view]
+    public fun get_username(addr: address): vector<u8> acquires UsernameStore {
+        let username_store = borrow_global<UsernameStore>(@campaign_manager);
+        let len = vector::length(&username_store.usernames);
+        let i = 0;
+        while (i < len) {
+            let entry = vector::borrow(&username_store.usernames, i);
+            if (entry.address == addr) {
+                return *&entry.username
+            };
+            i = i + 1;
+        };
+        vector::empty<u8>() // Return empty vector if no username is found
+    }
+
+    #[view]
+    public fun get_username_edit_count(addr: address): u64 acquires UsernameStore {
+        let username_store = borrow_global<UsernameStore>(@campaign_manager);
+        let len = vector::length(&username_store.usernames);
+        let i = 0;
+        while (i < len) {
+            let entry = vector::borrow(&username_store.usernames, i);
+            if (entry.address == addr) {
+                return entry.edit_count
+            };
+            i = i + 1;
+        };
+        0
     }
 }
 

@@ -9,6 +9,7 @@ module campaign_manager::contribution {
     use campaign_manager::campaign_state;
     use campaign_manager::verifier;
     use campaign_manager::escrow;
+    use campaign_manager::reputation;
 
     /// Error codes
     const EINVALID_CONTRIBUTION: u64 = 1;
@@ -20,6 +21,9 @@ module campaign_manager::contribution {
     const EVERIFIER_LOW_REPUTATION: u64 = 7;
     const ENOT_CONTRIBUTOR: u64 = 8;
     const ENOT_VERIFIER: u64 = 9;
+
+    /// Verification threshold for high-quality contributions
+    const VERIFICATION_THRESHOLD: u64 = 80;
 
     struct Contribution has store, copy {
         contribution_id: String,
@@ -76,6 +80,9 @@ module campaign_manager::contribution {
     ) acquires ContributionStore {
         let sender = signer::address_of(account);
         
+        // Initialize reputation store for new contributors
+        reputation::ensure_reputation_store_exists(account);
+
         // Verify campaign is active
         assert!(
             campaign_state::verify_campaign_active(campaign_id),
@@ -151,7 +158,29 @@ module campaign_manager::contribution {
             let i = len - 1; // We just added it, so it's the last one
             let contribution = vector::borrow_mut(&mut contribution_store.contributions, i);
             contribution.reward_released = true;
+
+            // Award reputation points to contributor
+            reputation::add_reputation_points(
+                sender,
+                10, // Base points for successful contribution
+                b"Successful contribution with reward"
+            );
+
+            // Get campaign owner and award them points too
+            let owner = campaign_state::get_campaign_owner(campaign_id);
+            if (reputation::has_reputation_store(owner)) {
+                reputation::add_reputation_points(
+                    owner,
+                    5, // Points for successful reward payout
+                    b"Successful reward payout"
+                );
+                // Record successful payment for campaign owner
+                reputation::record_successful_payment(owner);
+            };
         };
+
+        // Record the base contribution regardless of reward
+        reputation::record_successful_contribution(sender);
     }
 
     public entry fun verify_contribution<CoinType: key>(
@@ -161,6 +190,9 @@ module campaign_manager::contribution {
         verifier_signature: vector<u8>,
     ) acquires ContributionStore {
         let sender = signer::address_of(account);
+        
+        // Initialize reputation store for new verifiers
+        reputation::ensure_reputation_store_exists(account);
         
         // Verify that the sender is an authorized verifier
         assert!(
@@ -206,6 +238,16 @@ module campaign_manager::contribution {
                         timestamp: timestamp::now_seconds(),
                     },
                 );
+
+                // If verification is successful (score above threshold), award reputation
+                if (quality_score >= VERIFICATION_THRESHOLD) {
+                    reputation::add_reputation_points(
+                        sender,
+                        20, // Extra points for high-quality contribution
+                        b"High-quality verified contribution"
+                    );
+                };
+
                 return
             };
             i = i + 1;
@@ -542,15 +584,11 @@ module campaign_manager::contribution_tests {
         );
     }
 
-    #[test(admin = @campaign_manager, contributor = @0x456)]
+    #[test(admin = @campaign_manager, contributor = @0x456, verifier = @0x789)]
     public fun test_get_address_contribution_count(admin: &signer, contributor: &signer) {
-        timestamp::set_time_has_started_for_testing(admin);
-        account::create_account_for_test(signer::address_of(admin));
-        account::create_account_for_test(signer::address_of(contributor));
-        
-        contribution::init_module(admin);
-        
-        let campaign_id = string::utf8(b"test_campaign");
+        setup_test_environment(admin, contributor, verifier);
+        let campaign_id = setup_test_campaign(admin);
+
         let contributor_addr = signer::address_of(contributor);
 
         // Initially should be 0

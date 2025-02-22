@@ -19,6 +19,14 @@ npx ts-node scripts/cli/verifier/check_verifier.ts
 npx ts-node scripts/setup/initialize_verifier.ts
 npx ts-node scripts/setup/subscription.ts
 
+# Reputation Management
+npx ts-node scripts/cli/reputation/get_reputation.ts
+
+# Profile Management
+npx ts-node scripts/cli/profile/manage_profile.ts set <username>
+npx ts-node scripts/cli/profile/manage_profile.ts edit <username>
+npx ts-node scripts/cli/profile/manage_profile.ts view [address]
+
 # Notes:
 - Parameters in <angle_brackets> are required
 - Parameters in [square_brackets] are optional
