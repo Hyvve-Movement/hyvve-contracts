@@ -38,7 +38,7 @@ async function main() {
     if (!campaignId || !dataUrl || !qualityScore) {
       console.error('Missing required parameters');
       console.log(
-        'Usage: npx ts-node scripts/submit_contribution.ts <campaign_id> <data_url> <quality_score>'
+        'Usage: npx ts-node scripts/cli/contribution/submit_contribution.ts <campaign_id> <data_url> <quality_score>'
       );
       process.exit(1);
     }
@@ -75,7 +75,7 @@ async function main() {
     console.log('Message to sign:', Array.from(messageToSign));
     console.log('Verifier address:', verifierAccount.address().hex());
 
-    // Hash the message with SHA-256 before signing (to match Move contract)
+    // Hash the message with SHA-256 before signing
     const messageHash = crypto
       .createHash('sha2-256')
       .update(messageToSign)

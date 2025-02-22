@@ -1,17 +1,29 @@
-npx ts-node scripts/register_verifier.ts
-npx ts-node scripts/check_verifier.ts
-npx ts-node scripts/register_verifier_key.ts
-npx ts-node scripts/create_campaign.ts
-npx ts-node scripts/submit_contribution.ts test_campaign_1 https://example.com/data.json 100
+# Campaign Management
+npx ts-node scripts/cli/campaign/create_campaign.ts
+npx ts-node scripts/cli/campaign/list_active_campaigns.ts
 
-npx ts-node scripts/manage_subscription.ts create premium 100000000 true // Create a subscription:
-npx ts-node scripts/manage_subscription.ts setup-payment 500000000 // Setup payment delegation (for auto-renewals):
-npx ts-node scripts/manage_subscription.ts status // Check subscription status:
-npx ts-node scripts/manage_subscription.ts renew // Renew subscription manually:
-npx ts-node scripts/manage_subscription.ts cancel // Cancel subscription:
+# Contribution Management
+npx ts-node scripts/cli/contribution/submit_contribution.ts <campaign_id> <data_url> <quality_score>
+npx ts-node scripts/cli/contribution/get_contributions.ts [campaign_id] [contributor_address]
 
+# Campaign Statistics
+npx ts-node scripts/cli/stats/activity.ts [address]
+npx ts-node scripts/cli/stats/check_address_stats.ts [address]
 
-1. Initialize contract store
-2. Register verifier
-3. Register verifier key
-4. Submit contribution
+# Verifier Management
+npx ts-node scripts/cli/verifier/register_verifier.ts
+npx ts-node scripts/cli/verifier/register_verifier_key.ts
+npx ts-node scripts/cli/verifier/check_verifier.ts
+
+# Setup and Initialization
+npx ts-node scripts/setup/initialize_verifier.ts
+npx ts-node scripts/setup/subscription.ts
+
+# Notes:
+- Parameters in <angle_brackets> are required
+- Parameters in [square_brackets] are optional
+- If no address is provided for stats commands, uses the account from PRIVATE_KEY in .env
+- For get_contributions:
+  * Provide campaign_id to view all contributions for a campaign
+  * Provide contributor_address to view all contributions by an address
+  * Provide both to filter contributions by campaign and contributor

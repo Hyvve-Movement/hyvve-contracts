@@ -9,6 +9,7 @@ module campaign_manager::campaign {
     use aptos_framework::coin::{Self, Coin};
     use campaign_manager::campaign_state;
     use campaign_manager::escrow;
+    use campaign_manager::contribution;
 
     /// Error codes
     const EINVALID_REWARD_POOL: u64 = 1;
@@ -486,6 +487,76 @@ module campaign_manager::campaign {
         };
         abort error::not_found(ECAMPAIGN_NOT_FOUND)
     }
+
+    #[view]
+    public fun get_address_total_spent<CoinType: key>(
+        campaign_store_address: address,
+        owner_address: address
+    ): u64 acquires CampaignStore {
+        let campaign_store = borrow_global<CampaignStore>(campaign_store_address);
+        let total_spent = 0u64;
+        let len = vector::length(&campaign_store.campaigns);
+        let i = 0;
+        while (i < len) {
+            let campaign = vector::borrow(&campaign_store.campaigns, i);
+            if (campaign.owner == owner_address && campaign.escrow_setup) {
+                total_spent = total_spent + campaign.total_budget;
+            };
+            i = i + 1;
+        };
+        total_spent
+    }
+
+    #[view]
+    public fun get_address_total_earned<CoinType: key>(
+        campaign_store_address: address,
+        contributor_address: address
+    ): u64 acquires CampaignStore {
+        let campaign_store = borrow_global<CampaignStore>(campaign_store_address);
+        let total_earned = 0u64;
+        let len = vector::length(&campaign_store.campaigns);
+        let i = 0;
+        while (i < len) {
+            let campaign = vector::borrow(&campaign_store.campaigns, i);
+            if (campaign.escrow_setup) {
+                // Get contribution count and rewards for this campaign
+                let contribution_count = campaign_manager::contribution::get_address_contribution_count(
+                    contributor_address,
+                    campaign.campaign_id
+                );
+                if (contribution_count > 0) {
+                    total_earned = total_earned + (contribution_count * campaign.unit_price);
+                };
+            };
+            i = i + 1;
+        };
+        total_earned
+    }
+
+    #[view]
+    public fun get_address_campaign_count(
+        campaign_store_address: address,
+        owner_address: address
+    ): (u64, u64) acquires CampaignStore {
+        let campaign_store = borrow_global<CampaignStore>(campaign_store_address);
+        let total_count = 0u64;
+        let active_count = 0u64;
+        let current_time = timestamp::now_seconds();
+        
+        let len = vector::length(&campaign_store.campaigns);
+        let i = 0;
+        while (i < len) {
+            let campaign = vector::borrow(&campaign_store.campaigns, i);
+            if (campaign.owner == owner_address) {
+                total_count = total_count + 1;
+                if (campaign.is_active && current_time <= campaign.expiration) {
+                    active_count = active_count + 1;
+                };
+            };
+            i = i + 1;
+        };
+        (total_count, active_count)
+    }
 }
 
 #[test_only]
@@ -496,6 +567,7 @@ module campaign_manager::campaign_tests {
     use aptos_framework::coin;
     use aptos_framework::timestamp;
     use campaign_manager::campaign;
+    use campaign_manager::contribution;
 
     struct TestCoin has key { }
 
@@ -804,5 +876,151 @@ module campaign_manager::campaign_tests {
         
         // Initially, remaining budget should equal total budget
         assert!(remaining_budget == total_budget, 0);
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456)]
+    public fun test_address_totals(admin: &signer, contributor: &signer) {
+        timestamp::set_time_has_started_for_testing(admin);
+        account::create_account_for_test(signer::address_of(admin));
+        account::create_account_for_test(signer::address_of(contributor));
+        campaign::init_module(admin);
+        contribution::init_module(admin);
+
+        // Create two campaigns
+        let campaign_id1 = string::utf8(b"test_campaign_1");
+        let campaign_id2 = string::utf8(b"test_campaign_2");
+        let unit_price1 = 100;
+        let unit_price2 = 200;
+        let total_budget1 = 1000;
+        let total_budget2 = 2000;
+
+        // Create campaigns
+        campaign::create_campaign<TestCoin>(
+            admin,
+            campaign_id1,
+            string::utf8(b"Test Campaign 1"),
+            string::utf8(b"Description"),
+            string::utf8(b"Requirements"),
+            string::utf8(b"Criteria"),
+            unit_price1,
+            total_budget1,
+            5,
+            10,
+            timestamp::now_seconds() + 86400,
+            string::utf8(b"ipfs://test1"),
+            10,
+            vector::empty(),
+        );
+
+        campaign::create_campaign<TestCoin>(
+            admin,
+            campaign_id2,
+            string::utf8(b"Test Campaign 2"),
+            string::utf8(b"Description"),
+            string::utf8(b"Requirements"),
+            string::utf8(b"Criteria"),
+            unit_price2,
+            total_budget2,
+            5,
+            10,
+            timestamp::now_seconds() + 86400,
+            string::utf8(b"ipfs://test2"),
+            10,
+            vector::empty(),
+        );
+
+        // Check total spent by admin
+        let total_spent = campaign::get_address_total_spent<TestCoin>(
+            @campaign_manager,
+            signer::address_of(admin)
+        );
+        assert!(total_spent == total_budget1 + total_budget2, 0);
+
+        // Submit contributions from contributor
+        contribution::submit_contribution<TestCoin>(
+            contributor,
+            campaign_id1,
+            string::utf8(b"contribution1"),
+            string::utf8(b"ipfs://data1"),
+            vector::empty(),
+            vector::empty(),
+            80,
+        );
+
+        contribution::submit_contribution<TestCoin>(
+            contributor,
+            campaign_id2,
+            string::utf8(b"contribution2"),
+            string::utf8(b"ipfs://data2"),
+            vector::empty(),
+            vector::empty(),
+            80,
+        );
+
+        // Check total earned by contributor
+        let total_earned = campaign::get_address_total_earned<TestCoin>(
+            @campaign_manager,
+            signer::address_of(contributor)
+        );
+        assert!(total_earned == unit_price1 + unit_price2, 1);
+    }
+
+    #[test(admin = @campaign_manager)]
+    public fun test_get_address_campaign_count(admin: &signer) {
+        timestamp::set_time_has_started_for_testing(admin);
+        account::create_account_for_test(signer::address_of(admin));
+        campaign::init_module(admin);
+
+        let admin_addr = signer::address_of(admin);
+        
+        // Initially should be 0
+        let (total, active) = campaign::get_address_campaign_count(@campaign_manager, admin_addr);
+        assert!(total == 0 && active == 0, 0);
+
+        // Create two campaigns
+        campaign::create_campaign<TestCoin>(
+            admin,
+            string::utf8(b"campaign1"),
+            string::utf8(b"title1"),
+            string::utf8(b"description1"),
+            string::utf8(b"requirements1"),
+            string::utf8(b"criteria1"),
+            100,
+            1000,
+            5,
+            10,
+            timestamp::now_seconds() + 86400,
+            string::utf8(b"metadata1"),
+            10,
+            vector::empty(),
+        );
+
+        campaign::create_campaign<TestCoin>(
+            admin,
+            string::utf8(b"campaign2"),
+            string::utf8(b"title2"),
+            string::utf8(b"description2"),
+            string::utf8(b"requirements2"),
+            string::utf8(b"criteria2"),
+            200,
+            2000,
+            10,
+            20,
+            timestamp::now_seconds() + 86400,
+            string::utf8(b"metadata2"),
+            10,
+            vector::empty(),
+        );
+
+        // Should now have 2 total, 2 active
+        let (total, active) = campaign::get_address_campaign_count(@campaign_manager, admin_addr);
+        assert!(total == 2 && active == 2, 1);
+
+        // Cancel one campaign
+        campaign::cancel_campaign<TestCoin>(admin, string::utf8(b"campaign1"));
+
+        // Should now have 2 total, 1 active
+        let (total, active) = campaign::get_address_campaign_count(@campaign_manager, admin_addr);
+        assert!(total == 2 && active == 1, 2);
     }
 }

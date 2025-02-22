@@ -5,10 +5,8 @@
   "type": "module",
   "main": "scripts/deploy.ts",
   "scripts": {
-    "deploy": "ts-node scripts/deploy.ts",
-    "compile": "aptos move compile",
-    "test": "aptos move test",
-    "create-campaign": "ts-node scripts/create_campaign.ts"
+    "deploy": "movement move publish  --named-addresses campaign_manager=default",
+    "compile": "movement move compile  --named-addresses campaign_manager=default"
   },
   "dependencies": {
     "aptos": "^1.21.0"

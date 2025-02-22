@@ -271,6 +271,49 @@ module campaign_manager::contribution {
         let contribution_store = borrow_global<ContributionStore>(@campaign_manager);
         contribution_store.contributions
     }
+
+    #[view]
+    public fun get_address_contribution_count(
+        contributor_address: address,
+        campaign_id: String
+    ): u64 acquires ContributionStore {
+        let contribution_store = borrow_global<ContributionStore>(@campaign_manager);
+        let count = 0u64;
+        let len = vector::length(&contribution_store.contributions);
+        let i = 0;
+        while (i < len) {
+            let contribution = vector::borrow(&contribution_store.contributions, i);
+            if (contribution.contributor == contributor_address && 
+                contribution.campaign_id == campaign_id &&
+                contribution.reward_released) {
+                count = count + 1;
+            };
+            i = i + 1;
+        };
+        count
+    }
+
+    #[view]
+    public fun get_address_total_contributions(
+        contributor_address: address
+    ): (u64, u64) acquires ContributionStore {
+        let contribution_store = borrow_global<ContributionStore>(@campaign_manager);
+        let total_count = 0u64;
+        let verified_count = 0u64;
+        let len = vector::length(&contribution_store.contributions);
+        let i = 0;
+        while (i < len) {
+            let contribution = vector::borrow(&contribution_store.contributions, i);
+            if (contribution.contributor == contributor_address) {
+                total_count = total_count + 1;
+                if (contribution.is_verified && contribution.reward_released) {
+                    verified_count = verified_count + 1;
+                };
+            };
+            i = i + 1;
+        };
+        (total_count, verified_count)
+    }
 }
 
 #[test_only]
@@ -497,5 +540,102 @@ module campaign_manager::contribution_tests {
             signature,
             80,
         );
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456)]
+    public fun test_get_address_contribution_count(admin: &signer, contributor: &signer) {
+        timestamp::set_time_has_started_for_testing(admin);
+        account::create_account_for_test(signer::address_of(admin));
+        account::create_account_for_test(signer::address_of(contributor));
+        
+        contribution::init_module(admin);
+        
+        let campaign_id = string::utf8(b"test_campaign");
+        let contributor_addr = signer::address_of(contributor);
+
+        // Initially should be 0
+        let count = contribution::get_address_contribution_count(contributor_addr, campaign_id);
+        assert!(count == 0, 0);
+
+        // Add some contributions
+        let contribution1 = Contribution {
+            contribution_id: string::utf8(b"contribution1"),
+            campaign_id,
+            contributor: contributor_addr,
+            data_url: string::utf8(b"ipfs://data1"),
+            data_hash: vector::empty(),
+            timestamp: timestamp::now_seconds(),
+            verification_scores: verifier::create_verification_scores(90, 85),
+            is_verified: true,
+            reward_released: true
+        };
+
+        let contribution2 = Contribution {
+            contribution_id: string::utf8(b"contribution2"),
+            campaign_id,
+            contributor: contributor_addr,
+            data_url: string::utf8(b"ipfs://data2"),
+            data_hash: vector::empty(),
+            timestamp: timestamp::now_seconds(),
+            verification_scores: verifier::create_verification_scores(90, 85),
+            is_verified: true,
+            reward_released: true
+        };
+
+        let contribution_store = borrow_global_mut<ContributionStore>(@campaign_manager);
+        vector::push_back(&mut contribution_store.contributions, contribution1);
+        vector::push_back(&mut contribution_store.contributions, contribution2);
+
+        // Should now be 2
+        let count = contribution::get_address_contribution_count(contributor_addr, campaign_id);
+        assert!(count == 2, 1);
+    }
+
+    #[test(admin = @campaign_manager, contributor = @0x456)]
+    public fun test_get_address_total_contributions(admin: &signer, contributor: &signer) {
+        timestamp::set_time_has_started_for_testing(admin);
+        account::create_account_for_test(signer::address_of(admin));
+        account::create_account_for_test(signer::address_of(contributor));
+        
+        contribution::init_module(admin);
+        
+        let contributor_addr = signer::address_of(contributor);
+
+        // Initially should be 0
+        let (total, verified) = contribution::get_address_total_contributions(contributor_addr);
+        assert!(total == 0 && verified == 0, 0);
+
+        // Add some contributions
+        let contribution1 = Contribution {
+            contribution_id: string::utf8(b"contribution1"),
+            campaign_id: string::utf8(b"campaign1"),
+            contributor: contributor_addr,
+            data_url: string::utf8(b"ipfs://data1"),
+            data_hash: vector::empty(),
+            timestamp: timestamp::now_seconds(),
+            verification_scores: verifier::create_verification_scores(90, 85),
+            is_verified: true,
+            reward_released: true
+        };
+
+        let contribution2 = Contribution {
+            contribution_id: string::utf8(b"contribution2"),
+            campaign_id: string::utf8(b"campaign1"),
+            contributor: contributor_addr,
+            data_url: string::utf8(b"ipfs://data2"),
+            data_hash: vector::empty(),
+            timestamp: timestamp::now_seconds(),
+            verification_scores: verifier::create_verification_scores(90, 85),
+            is_verified: false,
+            reward_released: false
+        };
+
+        let contribution_store = borrow_global_mut<ContributionStore>(@campaign_manager);
+        vector::push_back(&mut contribution_store.contributions, contribution1);
+        vector::push_back(&mut contribution_store.contributions, contribution2);
+
+        // Should now have 2 total, 1 verified
+        let (total, verified) = contribution::get_address_total_contributions(contributor_addr);
+        assert!(total == 2 && verified == 1, 1);
     }
 } 
