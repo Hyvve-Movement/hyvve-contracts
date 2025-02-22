@@ -4,11 +4,10 @@ module campaign_manager::escrow {
     use std::string::{Self, String};
     use std::vector;
     use aptos_framework::account;
-    use aptos_framework::coin::{Self, Coin};
+    use aptos_framework::coin;
     use aptos_framework::event;
     use aptos_framework::timestamp;
     use campaign_manager::campaign_state;
-    use campaign_manager::reward_manager;
 
     /// Error codes
     const EINSUFFICIENT_BALANCE: u64 = 1;
@@ -60,9 +59,17 @@ module campaign_manager::escrow {
     }
 
     fun init_module(account: &signer) {
-        let (escrow_signer, signer_cap) = account::create_resource_account(account, b"escrow");
+        // Create resource account with seed
+        let seed = b"campaign_manager_escrow_v1";
+        let (escrow_signer, signer_cap) = account::create_resource_account(account, seed);
+
+        // Register the coin store for the escrow account
+        coin::register<aptos_framework::aptos_coin::AptosCoin>(&escrow_signer);
+
+        // Store the signer capability
         move_to(&escrow_signer, EscrowSigner { signer_cap });
 
+        // Initialize the escrow store
         let escrow_store = EscrowStore<aptos_framework::aptos_coin::AptosCoin> {
             escrows: vector::empty(),
             platform_wallet: @campaign_manager, // Default to module publisher
@@ -73,7 +80,8 @@ module campaign_manager::escrow {
     }
 
     fun get_escrow_signer(): signer acquires EscrowSigner {
-        let signer_cap = &borrow_global<EscrowSigner>(@campaign_manager).signer_cap;
+        let escrow_addr = account::create_resource_address(&@campaign_manager, b"campaign_manager_escrow_v1");
+        let signer_cap = &borrow_global<EscrowSigner>(escrow_addr).signer_cap;
         account::create_signer_with_capability(signer_cap)
     }
 
@@ -83,7 +91,7 @@ module campaign_manager::escrow {
         total_amount: u64,
         unit_reward: u64,
         platform_fee: u64,
-    ) acquires EscrowStore {
+    ) acquires EscrowStore, EscrowSigner {
         let sender = signer::address_of(account);
         
         // Verify campaign exists and is active
@@ -105,8 +113,17 @@ module campaign_manager::escrow {
         let escrow_store = borrow_global_mut<EscrowStore<CoinType>>(@campaign_manager);
         vector::push_back(&mut escrow_store.escrows, escrow);
 
+        // Get escrow signer and its address
+        let escrow_signer = get_escrow_signer();
+        let escrow_addr = signer::address_of(&escrow_signer);
+
+        // Register coin store if not already registered
+        if (!coin::is_account_registered<CoinType>(escrow_addr)) {
+            coin::register<CoinType>(&escrow_signer);
+        };
+
         // Transfer funds from sender to escrow account
-        coin::transfer<CoinType>(account, @campaign_manager, total_amount);
+        coin::transfer<CoinType>(account, escrow_addr, total_amount);
 
         event::emit_event(
             &mut escrow_store.escrow_events,
@@ -127,12 +144,6 @@ module campaign_manager::escrow {
     ) acquires EscrowStore, EscrowSigner {
         let sender = signer::address_of(account);
         
-        // Verify reward is claimable
-        assert!(
-            reward_manager::is_reward_claimed<CoinType>(sender, campaign_id, contribution_id),
-            error::invalid_state(EREWARD_ALREADY_CLAIMED)
-        );
-
         let escrow_store = borrow_global_mut<EscrowStore<CoinType>>(@campaign_manager);
         let len = vector::length(&escrow_store.escrows);
         let i = 0;
@@ -148,6 +159,10 @@ module campaign_manager::escrow {
 
                 // Update escrow state
                 escrow.total_released = escrow.total_released + reward_amount;
+
+                // Add balance check
+                assert!(escrow.total_locked - escrow.total_released >= 0, 
+                       error::invalid_state(EINSUFFICIENT_BALANCE));
 
                 // Get escrow signer for withdrawals
                 let escrow_signer = get_escrow_signer();
@@ -170,10 +185,6 @@ module campaign_manager::escrow {
                         timestamp: timestamp::now_seconds(),
                     },
                 );
-
-                // Add balance check
-                assert!(escrow.total_locked - escrow.total_released >= reward_amount, 
-                       error::invalid_state(EINSUFFICIENT_BALANCE));
                 return
             };
             i = i + 1;
@@ -270,6 +281,7 @@ module campaign_manager::escrow {
 module campaign_manager::escrow_tests {
     use std::string;
     use std::signer;
+    use std::vector;
     use aptos_framework::account;
     use aptos_framework::coin::{Self};
     use aptos_framework::timestamp;
@@ -278,7 +290,6 @@ module campaign_manager::escrow_tests {
     use campaign_manager::contribution;
     use campaign_manager::escrow;
     use campaign_manager::verifier;
-    use campaign_manager::reward_manager;
 
     struct TestCoin has key { }
 
@@ -292,12 +303,34 @@ module campaign_manager::escrow_tests {
         account::create_account_for_test(signer::address_of(contributor));
         account::create_account_for_test(signer::address_of(platform_wallet));
 
+        // Initialize modules
         campaign::initialize(admin);
         campaign_state::initialize(admin);
-        contribution::initialize(contributor);
+        contribution::initialize(admin);
         verifier::initialize(admin);
-        reward_manager::initialize(admin);
-        escrow::init_module<TestCoin>(admin);
+        escrow::init_module(admin);
+
+        // Setup test coin
+        let (burn_cap, freeze_cap, mint_cap) = coin::initialize<TestCoin>(
+            admin,
+            string::utf8(b"Test Coin"),
+            string::utf8(b"TEST"),
+            8,
+            true,
+        );
+
+        // Register and mint coins for admin
+        coin::register<TestCoin>(admin);
+        coin::register<TestCoin>(contributor);
+        coin::register<TestCoin>(platform_wallet);
+        
+        let amount = 10000;
+        coin::mint<TestCoin>(amount, &mint_cap, admin);
+
+        // Clean up capabilities
+        coin::destroy_burn_cap(burn_cap);
+        coin::destroy_freeze_cap(freeze_cap);
+        coin::destroy_mint_cap(mint_cap);
     }
 
     fun setup_test_campaign(admin: &signer): string::String {

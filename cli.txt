@@ -4,6 +4,13 @@ npx ts-node scripts/register_verifier_key.ts
 npx ts-node scripts/create_campaign.ts
 npx ts-node scripts/submit_contribution.ts test_campaign_1 https://example.com/data.json 100
 
+npx ts-node scripts/manage_subscription.ts create premium 100000000 true // Create a subscription:
+npx ts-node scripts/manage_subscription.ts setup-payment 500000000 // Setup payment delegation (for auto-renewals):
+npx ts-node scripts/manage_subscription.ts status // Check subscription status:
+npx ts-node scripts/manage_subscription.ts renew // Renew subscription manually:
+npx ts-node scripts/manage_subscription.ts cancel // Cancel subscription:
+
+
 1. Initialize contract store
 2. Register verifier
 3. Register verifier key

@@ -8,7 +8,7 @@ module campaign_manager::contribution {
     use aptos_framework::timestamp;
     use campaign_manager::campaign_state;
     use campaign_manager::verifier;
-    use campaign_manager::reward_manager;
+    use campaign_manager::escrow;
 
     /// Error codes
     const EINVALID_CONTRIBUTION: u64 = 1;
@@ -30,7 +30,7 @@ module campaign_manager::contribution {
         timestamp: u64,
         verification_scores: verifier::VerificationScores,
         is_verified: bool,
-        reward_claimed: bool
+        reward_released: bool
     }
 
     struct ContributionStore has key {
@@ -115,7 +115,7 @@ module campaign_manager::contribution {
             timestamp: timestamp::now_seconds(),
             verification_scores: *scores,
             is_verified: true,
-            reward_claimed: false,
+            reward_released: false,
         };
 
         let contribution_store = borrow_global_mut<ContributionStore>(@campaign_manager);
@@ -139,13 +139,18 @@ module campaign_manager::contribution {
 
         // Release reward if scores are sufficient
         if (verifier::is_sufficient_for_reward(scores)) {
-            reward_manager::process_reward<CoinType>(
+            // Release reward through escrow
+            escrow::release_reward<CoinType>(
                 account,
                 campaign_id,
                 contribution_id,
-                scores,
-                0, // Amount will be determined by escrow
             );
+
+            // Mark contribution as rewarded
+            let len = vector::length(&contribution_store.contributions);
+            let i = len - 1; // We just added it, so it's the last one
+            let contribution = vector::borrow_mut(&mut contribution_store.contributions, i);
+            contribution.reward_released = true;
         };
     }
 
@@ -183,13 +188,13 @@ module campaign_manager::contribution {
                 let (verifier_reputation, _) = verifier::get_scores(&contribution.verification_scores);
                 let scores = verifier::create_verification_scores(verifier_reputation, quality_score);
                 if (verifier::is_sufficient_for_reward(&scores)) {
-                    reward_manager::process_reward<CoinType>(
+                    // Release reward through escrow
+                    escrow::release_reward<CoinType>(
                         account,
                         contribution.campaign_id,
                         contribution_id,
-                        &scores,
-                        0, // Amount will be determined by escrow
                     );
+                    contribution.reward_released = true;
                 };
 
                 event::emit_event(
@@ -261,61 +266,6 @@ module campaign_manager::contribution {
         campaign_manager::verifier::verify_signature(verifier, message, signature)
     }
 
-    public fun mark_reward_claimed(
-        contribution_id: String
-    ): bool acquires ContributionStore {
-        let contribution_store = borrow_global_mut<ContributionStore>(@campaign_manager);
-        let len = vector::length(&contribution_store.contributions);
-        let i = 0;
-        while (i < len) {
-            let contribution = vector::borrow_mut(&mut contribution_store.contributions, i);
-            if (contribution.contribution_id == contribution_id) {
-                if (!contribution.reward_claimed && contribution.is_verified) {
-                    contribution.reward_claimed = true;
-                    return true
-                };
-                return false
-            };
-            i = i + 1;
-        };
-        false
-    }
-
-    public fun claim_reward<CoinType: key>(
-        account: &signer,
-        campaign_id: String,
-        contribution_id: String,
-    ) acquires ContributionStore {
-        let sender = signer::address_of(account);
-        
-        let contribution_store = borrow_global_mut<ContributionStore>(@campaign_manager);
-        let len = vector::length(&contribution_store.contributions);
-        let i = 0;
-        while (i < len) {
-            let contribution = vector::borrow_mut(&mut contribution_store.contributions, i);
-            if (contribution.contribution_id == contribution_id) {
-                assert!(contribution.contributor == sender, error::permission_denied(ENOT_CONTRIBUTOR));
-                assert!(contribution.is_verified, error::invalid_state(EINVALID_CONTRIBUTION));
-                assert!(!contribution.reward_claimed, error::invalid_state(ECONTRIBUTION_ALREADY_VERIFIED));
-                
-                let (verifier_reputation, _) = verifier::get_scores(&contribution.verification_scores);
-                assert!(verifier_reputation >= 70, error::invalid_argument(EVERIFIER_LOW_REPUTATION));
-
-                contribution.reward_claimed = true;
-                
-                // Release reward through escrow
-                campaign_manager::escrow::release_reward<CoinType>(
-                    account,
-                    campaign_id,
-                    contribution_id,
-                );
-                return
-            };
-            i = i + 1;
-        };
-        abort error::not_found(ECONTRIBUTION_NOT_FOUND)
-    }
-
     #[view]
     public fun get_contribution_store(): vector<Contribution> acquires ContributionStore {
         let contribution_store = borrow_global<ContributionStore>(@campaign_manager);
@@ -331,9 +281,9 @@ module campaign_manager::contribution_tests {
     use aptos_framework::account;
     use aptos_framework::timestamp;
     use campaign_manager::campaign;
-    use campaign_manager::contribution;
     use campaign_manager::campaign_state;
     use campaign_manager::verifier;
+    use campaign_manager::escrow;
 
     struct TestCoin has key { }
 
@@ -348,9 +298,9 @@ module campaign_manager::contribution_tests {
         account::create_account_for_test(signer::address_of(verifier_account));
 
         campaign::initialize(admin);
-        contribution::initialize(contributor);
         campaign_state::initialize(admin);
         verifier::initialize(admin);
+        escrow::init_module(admin);
     }
 
     fun setup_test_campaign(admin: &signer): string::String {
@@ -370,6 +320,15 @@ module campaign_manager::contribution_tests {
             timestamp::now_seconds() + 86400, // expiration (1 day)
             string::utf8(b"ipfs://test"),
             10, // platform_fee
+        );
+
+        // Create escrow for the campaign
+        escrow::create_campaign_escrow<TestCoin>(
+            admin,
+            campaign_id,
+            1000, // total_amount
+            100,  // unit_reward
+            10,   // platform_fee
         );
 
         campaign_id
@@ -413,7 +372,7 @@ module campaign_manager::contribution_tests {
         assert!(submitted_contribution.data_url == data_url, 3);
         assert!(submitted_contribution.data_hash == data_hash, 4);
         assert!(submitted_contribution.is_verified == true, 5);
-        assert!(submitted_contribution.reward_claimed == false, 6);
+        assert!(submitted_contribution.reward_released == true, 6); // Reward should be released immediately
     }
 
     #[test(admin = @campaign_manager, contributor = @0x456, verifier = @0x789)]
@@ -464,56 +423,17 @@ module campaign_manager::contribution_tests {
         );
 
         assert!(verified_contribution.is_verified == true, 0);
+        assert!(verified_contribution.reward_released == true, 1); // Reward should be released after verification
     }
 
-    #[test(admin = @campaign_manager, contributor = @0x456)]
-    public fun test_claim_reward(
-        admin: &signer,
-        contributor: &signer
-    ) {
-        setup_test_environment(admin, contributor, admin);
-        let campaign_id = setup_test_campaign(admin);
-
-        // Submit contribution
-        let contribution_id = string::utf8(b"test_contribution_1");
-        let data_url = string::utf8(b"ipfs://testdata");
-        let data_hash = vector::empty<u8>();
-        vector::push_back(&mut data_hash, 1);
-        let signature = vector::empty<u8>();
-        vector::push_back(&mut signature, 1);
-        
-        contribution::submit_contribution<TestCoin>(
-            contributor,
-            campaign_id,
-            contribution_id,
-            data_url,
-            data_hash,
-            signature,
-            80,
-        );
-
-        // Claim reward
-        contribution::claim_reward<TestCoin>(
-            contributor,
-            campaign_id,
-            contribution_id,
-        );
-
-        // Verify reward is claimed
-        let contribution_after_claim = contribution::get_contribution_details(
-            contribution_id
-        );
-
-        assert!(contribution_after_claim.reward_claimed == true, 0);
-    }
-
-    #[test(admin = @campaign_manager, contributor = @0x456)]
+    #[test(admin = @campaign_manager, contributor = @0x456, verifier = @0x789)]
     #[expected_failure(abort_code = 4)]
     public fun test_duplicate_contribution(
         admin: &signer,
-        contributor: &signer
+        contributor: &signer,
+        verifier: &signer
     ) {
-        setup_test_environment(admin, contributor, admin);
+        setup_test_environment(admin, contributor, verifier);
         let campaign_id = setup_test_campaign(admin);
 
         // Create test data
@@ -547,13 +467,14 @@ module campaign_manager::contribution_tests {
         );
     }
 
-    #[test(admin = @campaign_manager, contributor = @0x456)]
+    #[test(admin = @campaign_manager, contributor = @0x456, verifier = @0x789)]
     #[expected_failure(abort_code = 2)]
     public fun test_submit_to_inactive_campaign(
         admin: &signer,
-        contributor: &signer
+        contributor: &signer,
+        verifier: &signer
     ) {
-        setup_test_environment(admin, contributor, admin);
+        setup_test_environment(admin, contributor, verifier);
         let campaign_id = setup_test_campaign(admin);
 
         // Cancel campaign

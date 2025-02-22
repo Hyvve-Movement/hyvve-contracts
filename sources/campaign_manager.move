@@ -467,6 +467,25 @@ module campaign_manager::campaign {
         };
         false
     }
+
+    #[view]
+    public fun get_campaign_remaining_budget<CoinType: key>(
+        campaign_store_address: address,
+        campaign_id: String
+    ): u64 acquires CampaignStore {
+        let campaign_store = borrow_global<CampaignStore>(campaign_store_address);
+        let len = vector::length(&campaign_store.campaigns);
+        let i = 0;
+        while (i < len) {
+            let campaign = vector::borrow(&campaign_store.campaigns, i);
+            if (campaign.campaign_id == campaign_id) {
+                assert!(campaign.escrow_setup, error::invalid_state(EESCROW_NOT_SETUP));
+                return campaign_manager::escrow::get_available_balance<CoinType>(campaign_id)
+            };
+            i = i + 1;
+        };
+        abort error::not_found(ECAMPAIGN_NOT_FOUND)
+    }
 }
 
 #[test_only]
@@ -750,5 +769,40 @@ module campaign_manager::campaign_tests {
             string::utf8(b"non_existent_campaign"),
             signer::address_of(admin)
         ), 2);
+    }
+
+    #[test(campaign_admin = @campaign_manager)]
+    public fun test_get_campaign_remaining_budget(campaign_admin: &signer) {
+        timestamp::set_time_has_started_for_testing(campaign_admin);
+        account::create_account_for_test(signer::address_of(campaign_admin));
+        campaign::init_module(campaign_admin);
+
+        let campaign_id = string::utf8(b"test_campaign");
+        let total_budget = 1000;
+        
+        campaign::create_campaign<TestCoin>(
+            campaign_admin,
+            campaign_id,
+            string::utf8(b"Test Campaign"),
+            string::utf8(b"Description"),
+            string::utf8(b"Requirements"),
+            string::utf8(b"Criteria"),
+            100, // unit_price
+            total_budget,
+            5,
+            10,
+            timestamp::now_seconds() + 86400,
+            string::utf8(b"ipfs://test"),
+            10,
+            vector::empty(), // empty encryption key for test
+        );
+
+        let remaining_budget = campaign::get_campaign_remaining_budget<TestCoin>(
+            @campaign_manager,
+            campaign_id
+        );
+        
+        // Initially, remaining budget should equal total budget
+        assert!(remaining_budget == total_budget, 0);
     }
 }
