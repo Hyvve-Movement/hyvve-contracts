@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const NODE_URL = 'https://aptos.testnet.bardock.movementlabs.xyz/v1';
+const NODE_URL = process.env.RPC_URL || '';
 
 async function main() {
   try {
@@ -35,7 +35,7 @@ async function main() {
     const contributionStore = await client.view({
       function: `${moduleAddress}::contribution::get_contribution_store`,
       type_arguments: [],
-      arguments: [moduleAddress],
+      arguments: [],
     });
 
     if (contributionStore && Array.isArray(contributionStore[0])) {

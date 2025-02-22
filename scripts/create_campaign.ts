@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const CAMPAIGN_MANAGER_ADDRESS = process.env.CAMPAIGN_MANAGER_ADDRESS || '';
-const NODE_URL = 'https://aptos.testnet.porto.movementlabs.xyz/v1';
+const NODE_URL = process.env.RPC_URL || '';
 
 async function main() {
   try {
@@ -32,6 +32,7 @@ async function main() {
     const expiration = Math.floor(Date.now() / 1000) + 86400; // 24 hours from now
     const metadataUri = 'ipfs://test';
     const platformFee = 10;
+    const encryptionPubKey = new Uint8Array([1, 2, 3, 4]);
 
     // Create payload
     const payload = {
@@ -51,6 +52,7 @@ async function main() {
         expiration,
         metadataUri,
         platformFee,
+        Array.from(encryptionPubKey), // Convert Uint8Array to regular array for serialization
       ],
     };
 

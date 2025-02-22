@@ -40,6 +40,7 @@ module campaign_manager::campaign {
         total_contributions: u64,
         metadata_uri: String,     // IPFS/Arweave URI for additional metadata
         escrow_setup: bool,       // Track if escrow is set up
+        encryption_pub_key: vector<u8>, // Public encryption key for AES-256-CBC
     }
 
     struct CampaignStore has key {
@@ -97,6 +98,7 @@ module campaign_manager::campaign {
         expiration: u64,
         metadata_uri: String,
         platform_fee: u64,
+        encryption_pub_key: vector<u8>
     ) acquires CampaignStore {
         let sender = signer::address_of(account);
         
@@ -128,6 +130,7 @@ module campaign_manager::campaign {
             total_contributions: 0,
             metadata_uri,
             escrow_setup: false,
+            encryption_pub_key,
         };
 
         let campaign_store = borrow_global_mut<CampaignStore>(@campaign_manager);
@@ -247,7 +250,7 @@ module campaign_manager::campaign {
     public fun get_campaign_details(
         campaign_store_address: address,
         campaign_id: String
-    ): (String, String, String, String, u64, u64, u64, u64, u64, bool, String) acquires CampaignStore {
+    ): (String, String, String, String, u64, u64, u64, u64, u64, bool, String, vector<u8>) acquires CampaignStore {
         let campaign_store = borrow_global<CampaignStore>(campaign_store_address);
         let len = vector::length(&campaign_store.campaigns);
         let i = 0;
@@ -265,8 +268,27 @@ module campaign_manager::campaign {
                     campaign.max_data_count,
                     campaign.expiration,
                     campaign.is_active,
-                    campaign.metadata_uri
+                    campaign.metadata_uri,
+                    campaign.encryption_pub_key 
                 )
+            };
+            i = i + 1;
+        };
+        abort error::not_found(ECAMPAIGN_NOT_FOUND)
+    }
+
+    #[view]
+    public fun get_encryption_public_key(
+        campaign_store_address: address,
+        campaign_id: String
+    ): vector<u8> acquires CampaignStore {
+        let campaign_store = borrow_global<CampaignStore>(campaign_store_address);
+        let len = vector::length(&campaign_store.campaigns);
+        let i = 0;
+        while (i < len) {
+            let campaign = vector::borrow(&campaign_store.campaigns, i);
+            if (campaign.campaign_id == campaign_id) {
+                return campaign.encryption_pub_key
             };
             i = i + 1;
         };
@@ -425,6 +447,25 @@ module campaign_manager::campaign {
             i = i + 1;
         };
         (total_count, active_count)
+    }
+
+    #[view]
+    public fun is_campaign_owner(
+        campaign_store_address: address,
+        campaign_id: String,
+        owner_address: address
+    ): bool acquires CampaignStore {
+        let campaign_store = borrow_global<CampaignStore>(campaign_store_address);
+        let len = vector::length(&campaign_store.campaigns);
+        let i = 0;
+        while (i < len) {
+            let campaign = vector::borrow(&campaign_store.campaigns, i);
+            if (campaign.campaign_id == campaign_id) {
+                return campaign.owner == owner_address
+            };
+            i = i + 1;
+        };
+        false
     }
 }
 
@@ -669,5 +710,45 @@ module campaign_manager::campaign_tests {
         let (total_count, active_count) = campaign::get_campaign_count(@campaign_manager);
         assert!(total_count == 2, 2);
         assert!(active_count == 1, 3);
+    }
+
+    #[test(admin = @campaign_manager, other_user = @0x456)]
+    public fun test_is_campaign_owner(admin: &signer, other_user: &signer) {
+        timestamp::set_time_has_started_for_testing(admin);
+        account::create_account_for_test(signer::address_of(admin));
+        account::create_account_for_test(signer::address_of(other_user));
+        campaign::init_module(admin);
+
+        let campaign_id = string::utf8(b"test_campaign");
+        
+        // Create a campaign as admin
+        campaign::create_campaign<TestCoin>(
+            admin,
+            campaign_id,
+            string::utf8(b"Test Campaign"),
+            string::utf8(b"Description"),
+            string::utf8(b"Requirements"),
+            string::utf8(b"Criteria"),
+            100,
+            1000,
+            5,
+            10,
+            timestamp::now_seconds() + 86400,
+            string::utf8(b"ipfs://test"),
+            10,
+        );
+
+        // Check that admin is the owner
+        assert!(campaign::is_campaign_owner(@campaign_manager, campaign_id, signer::address_of(admin)), 0);
+        
+        // Check that other_user is not the owner
+        assert!(!campaign::is_campaign_owner(@campaign_manager, campaign_id, signer::address_of(other_user)), 1);
+        
+        // Check non-existent campaign returns false
+        assert!(!campaign::is_campaign_owner(
+            @campaign_manager,
+            string::utf8(b"non_existent_campaign"),
+            signer::address_of(admin)
+        ), 2);
     }
 }

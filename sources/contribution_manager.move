@@ -88,6 +88,7 @@ module campaign_manager::contribution {
             error::already_exists(EDUPLICATE_CONTRIBUTION)
         );
 
+        // Delegate signature verification to the verifier module.
         let result = verifier::verify_contribution(
             campaign_id,
             data_hash,
@@ -96,13 +97,12 @@ module campaign_manager::contribution {
             quality_score
         );
         
-        // Verify the contribution signature using contributor's address
+        // Ensure the signature is valid.
         assert!(
-            verify_contribution_signature(campaign_id, data_hash, sender, signature),
+            verifier::is_valid(&result),
             error::invalid_argument(EINVALID_SIGNATURE)
         );
         
-        assert!(verifier::is_valid(&result), error::invalid_argument(EINVALID_SIGNATURE));
         let scores = verifier::get_result_scores(&result);
         let (verifier_reputation, _) = verifier::get_scores(scores);
         
@@ -137,7 +137,7 @@ module campaign_manager::contribution {
             },
         );
 
-        // Only release reward if scores are sufficient
+        // Release reward if scores are sufficient
         if (verifier::is_sufficient_for_reward(scores)) {
             reward_manager::process_reward<CoinType>(
                 account,
@@ -241,21 +241,7 @@ module campaign_manager::contribution {
         false
     }
 
-    fun verify_contribution_signature(
-        campaign_id: String,
-        data_hash: vector<u8>,
-        contributor: address,
-        signature: vector<u8>
-    ): bool {
-        let message = vector::empty<u8>();
-        let campaign_id_bytes = *string::bytes(&campaign_id);
-        vector::append(&mut message, campaign_id_bytes);
-        vector::append(&mut message, data_hash);
-        
-        // Verify using contributor's address
-        campaign_manager::verifier::verify_signature(contributor, message, signature)
-    }
-
+    // (The helper function verify_contribution_signature is now removed)
     fun verify_verification_signature(
         contribution_id: String,
         quality_score: u64,
