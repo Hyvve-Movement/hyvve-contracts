@@ -10,14 +10,13 @@ async function createSubscription(
   client: AptosClient,
   account: AptosAccount,
   subscriptionType: string,
-  price: number,
   autoRenew: boolean
 ) {
   const payload = {
     type: 'entry_function_payload',
     function: `${CAMPAIGN_MANAGER_ADDRESS}::subscription::create_subscription`,
     type_arguments: ['0x1::aptos_coin::AptosCoin'],
-    arguments: [subscriptionType, price, autoRenew],
+    arguments: [subscriptionType, autoRenew],
   };
 
   const txnRequest = await client.generateTransaction(
@@ -30,7 +29,40 @@ async function createSubscription(
   console.log('Creating subscription...');
   console.log('Transaction hash:', txnResult.hash);
   await client.waitForTransaction(txnResult.hash);
-  console.log('Subscription created successfully!');
+  console.log('Subscription created successfully! (Price: 2 APT)');
+  console.log(
+    'View on explorer:',
+    `https://explorer.aptoslabs.com/txn/${txnResult.hash}?network=testnet`
+  );
+}
+
+async function createSubscriptionWithDelegation(
+  client: AptosClient,
+  account: AptosAccount,
+  subscriptionType: string,
+  autoRenew: boolean,
+  delegationAmount: number
+) {
+  const payload = {
+    type: 'entry_function_payload',
+    function: `${CAMPAIGN_MANAGER_ADDRESS}::subscription::create_subscription_with_delegation`,
+    type_arguments: ['0x1::aptos_coin::AptosCoin'],
+    arguments: [subscriptionType, autoRenew, delegationAmount],
+  };
+
+  const txnRequest = await client.generateTransaction(
+    account.address(),
+    payload
+  );
+  const signedTxn = await client.signTransaction(account, txnRequest);
+  const txnResult = await client.submitTransaction(signedTxn);
+
+  console.log('Creating subscription with delegation...');
+  console.log('Transaction hash:', txnResult.hash);
+  await client.waitForTransaction(txnResult.hash);
+  console.log(
+    'Subscription created successfully with delegation! (Price: 2 MOVE)'
+  );
   console.log(
     'View on explorer:',
     `https://explorer.aptoslabs.com/txn/${txnResult.hash}?network=testnet`
@@ -129,9 +161,52 @@ async function checkSubscriptionStatus(client: AptosClient, address: string) {
       isActive: result[0],
       endTime: new Date(Number(result[1]) * 1000).toLocaleString(),
       subscriptionType: result[2],
+      autoRenew: result[3],
     });
   } catch (error) {
     console.log('No active subscription found');
+  }
+}
+
+async function processDueRenewals(client: AptosClient, account: AptosAccount) {
+  const payload = {
+    type: 'entry_function_payload',
+    function: `${CAMPAIGN_MANAGER_ADDRESS}::subscription::process_due_renewals`,
+    type_arguments: ['0x1::aptos_coin::AptosCoin'],
+    arguments: [],
+  };
+
+  const txnRequest = await client.generateTransaction(
+    account.address(),
+    payload
+  );
+  const signedTxn = await client.signTransaction(account, txnRequest);
+  const txnResult = await client.submitTransaction(signedTxn);
+
+  console.log('Processing due subscription renewals...');
+  console.log('Transaction hash:', txnResult.hash);
+  await client.waitForTransaction(txnResult.hash);
+  console.log('Due subscriptions processed successfully!');
+  console.log(
+    'View on explorer:',
+    `https://explorer.aptoslabs.com/txn/${txnResult.hash}?network=testnet`
+  );
+}
+
+async function getDueRenewalsCount(client: AptosClient) {
+  try {
+    const payload = {
+      function: `${CAMPAIGN_MANAGER_ADDRESS}::subscription::get_due_renewals_count`,
+      type_arguments: [],
+      arguments: [],
+    };
+
+    const result = await client.view(payload);
+    console.log('Due Renewals Count:', result[0]);
+    return Number(result[0]);
+  } catch (error) {
+    console.log('Error getting due renewals count:', error);
+    return 0;
   }
 }
 
@@ -154,14 +229,20 @@ async function main() {
     switch (command) {
       case 'create':
         const subscriptionType = process.argv[3] || 'premium';
-        const price = parseInt(process.argv[4] || '100000000'); // Default 1 APT
-        const autoRenew = process.argv[5] === 'true';
-        await createSubscription(
+        const autoRenew = process.argv[4] === 'true';
+        await createSubscription(client, account, subscriptionType, autoRenew);
+        break;
+
+      case 'create-with-delegation':
+        const subType = process.argv[3] || 'premium';
+        const autoRenewWithDel = process.argv[4] === 'true';
+        const delegationAmount = parseInt(process.argv[5] || '200000000'); // Default 2 APT (enough for 1 renewal)
+        await createSubscriptionWithDelegation(
           client,
           account,
-          subscriptionType,
-          price,
-          autoRenew
+          subType,
+          autoRenewWithDel,
+          delegationAmount
         );
         break;
 
@@ -174,7 +255,7 @@ async function main() {
         break;
 
       case 'setup-payment':
-        const amount = parseInt(process.argv[3] || '100000000'); // Default 1 APT
+        const amount = parseInt(process.argv[3] || '200000000'); // Default 2 APT (enough for 1 renewal)
         await setupPaymentDelegation(client, account, amount);
         break;
 
@@ -182,13 +263,26 @@ async function main() {
         await checkSubscriptionStatus(client, account.address().hex());
         break;
 
+      case 'process-renewals':
+        await processDueRenewals(client, account);
+        break;
+
+      case 'due-count':
+        await getDueRenewalsCount(client);
+        break;
+
       default:
         console.log('Invalid command. Available commands:');
-        console.log('- create [type] [price] [autoRenew]');
+        console.log('- create [type] [autoRenew]');
+        console.log(
+          '- create-with-delegation [type] [autoRenew] [delegationAmount]'
+        );
         console.log('- renew');
         console.log('- cancel');
         console.log('- setup-payment [amount]');
         console.log('- status');
+        console.log('- process-renewals');
+        console.log('- due-count');
     }
   } catch (error) {
     console.error('Error:', error);

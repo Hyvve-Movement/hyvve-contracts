@@ -10,7 +10,7 @@ import crypto from 'crypto';
 
 dotenv.config();
 
-const NODE_URL = 'https://aptos.testnet.porto.movementlabs.xyz/v1';
+const NODE_URL = process.env.RPC_URL || '';
 
 async function main() {
   try {

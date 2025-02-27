@@ -22,6 +22,7 @@ module campaign_manager::subscription {
 
     /// Constants
     const SECONDS_PER_MONTH: u64 = 2592000; // 30 days in seconds
+    const DEFAULT_SUBSCRIPTION_PRICE: u64 = 200_000_000; // 2 APT
 
     struct DelegatedPaymentCapability<phantom CoinType> has key {
         balance: coin::Coin<CoinType>
@@ -78,13 +79,12 @@ module campaign_manager::subscription {
     public entry fun create_subscription<CoinType>(
         account: &signer,
         subscription_type: String,
-        price: u64,
         auto_renew: bool,
     ) acquires SubscriptionStore {
         let sender = signer::address_of(account);
         
-        // Validate inputs
-        assert!(price > 0, error::invalid_argument(EINVALID_SUBSCRIPTION_PRICE));
+        // Use default price
+        let price = DEFAULT_SUBSCRIPTION_PRICE;
         
         // Check if subscription already exists
         assert!(!subscription_exists(sender), error::already_exists(ESUBSCRIPTION_ALREADY_EXISTS));
@@ -117,6 +117,19 @@ module campaign_manager::subscription {
                 timestamp: current_time,
             },
         );
+    }
+
+    public entry fun create_subscription_with_delegation<CoinType>(
+        account: &signer,
+        subscription_type: String,
+        auto_renew: bool,
+        delegation_amount: u64,
+    ) acquires SubscriptionStore, DelegatedPaymentCapability {
+        // First setup the payment delegation
+        setup_payment_delegation<CoinType>(account, delegation_amount);
+        
+        // Then create the subscription with default price
+        create_subscription<CoinType>(account, subscription_type, auto_renew);
     }
 
     public entry fun renew_subscription<CoinType>(
@@ -191,7 +204,7 @@ module campaign_manager::subscription {
     #[view]
     public fun get_subscription_status(
         subscriber: address
-    ): (bool, u64, String) acquires SubscriptionStore {
+    ): (bool, u64, String, bool) acquires SubscriptionStore {
         let subscription_store = borrow_global<SubscriptionStore>(@campaign_manager);
         let len = vector::length(&subscription_store.subscriptions);
         let i = 0;
@@ -201,7 +214,8 @@ module campaign_manager::subscription {
                 return (
                     subscription.is_active,
                     subscription.end_time,
-                    subscription.subscription_type
+                    subscription.subscription_type,
+                    subscription.auto_renew
                 )
             };
             i = i + 1;
@@ -350,7 +364,6 @@ module campaign_manager::subscription {
         create_subscription<TestCoin>(
             subscriber,
             string::utf8(b"premium"),
-            100,
             true, // auto_renew
         );
 
@@ -361,7 +374,7 @@ module campaign_manager::subscription {
         process_due_renewals<TestCoin>(admin);
 
         // Verify subscription was renewed
-        let (is_active, end_time, _) = get_subscription_status(signer::address_of(subscriber));
+        let (is_active, end_time, _, _) = get_subscription_status(signer::address_of(subscriber));
         assert!(is_active == true, 0);
         assert!(end_time > timestamp::now_seconds(), 1);
     }
@@ -381,16 +394,14 @@ module campaign_manager::subscription {
 
         // Create test subscription
         let subscription_type = string::utf8(b"premium");
-        let price = 100;
         
         create_subscription<TestCoin>(
             subscriber,
             subscription_type,
-            price,
             true, // auto_renew
         );
 
-        let (is_active, _, returned_type) = get_subscription_status(signer::address_of(subscriber));
+        let (is_active, _, returned_type, _) = get_subscription_status(signer::address_of(subscriber));
         assert!(is_active == true, 0);
         assert!(returned_type == subscription_type, 1);
     }
@@ -407,13 +418,12 @@ module campaign_manager::subscription {
         create_subscription<TestCoin>(
             subscriber,
             string::utf8(b"premium"),
-            100,
             true,
         );
 
         cancel_subscription(subscriber);
 
-        let (is_active, _, _) = get_subscription_status(signer::address_of(subscriber));
+        let (is_active, _, _, _) = get_subscription_status(signer::address_of(subscriber));
         assert!(!is_active, 0);
     }
 } 

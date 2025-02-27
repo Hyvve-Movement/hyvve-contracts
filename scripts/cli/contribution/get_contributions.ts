@@ -53,6 +53,57 @@ async function getCampaignDetails(client: AptosClient, campaignId: string) {
   }
 }
 
+async function getEscrowInfo(client: AptosClient, campaignId: string) {
+  try {
+    const escrowInfo = await client.view({
+      function: `${CAMPAIGN_MANAGER_ADDRESS}::escrow::get_escrow_info`,
+      type_arguments: ['0x1::aptos_coin::AptosCoin'],
+      arguments: [campaignId],
+    });
+
+    return {
+      owner: escrowInfo[0],
+      totalLocked: Number(escrowInfo[1]),
+      totalReleased: Number(escrowInfo[2]),
+      unitReward: Number(escrowInfo[3]),
+      platformFee: Number(escrowInfo[4]),
+      isActive: escrowInfo[5],
+    };
+  } catch (error) {
+    console.error('Error fetching escrow info:', error);
+    return null;
+  }
+}
+
+async function getAddressReputation(
+  client: AptosClient,
+  address: string
+): Promise<number> {
+  try {
+    // First check if reputation store exists
+    const hasStore = await client.view({
+      function: `${CAMPAIGN_MANAGER_ADDRESS}::reputation::has_reputation_store`,
+      type_arguments: [],
+      arguments: [address],
+    });
+
+    if (!hasStore[0]) {
+      return 0;
+    }
+
+    // Get reputation score
+    const reputation = await client.view({
+      function: `${CAMPAIGN_MANAGER_ADDRESS}::reputation::get_reputation_score`,
+      type_arguments: [],
+      arguments: [address],
+    });
+    return Number(reputation[0]);
+  } catch (error) {
+    // Silently return 0 if there's an error
+    return 0;
+  }
+}
+
 async function getContributions(
   client: AptosClient,
   campaignId?: string,
@@ -103,6 +154,9 @@ async function displayContributions(
     ? await getCampaignDetails(client, contributions[0].campaign_id)
     : null;
 
+  // Get escrow info for reward details
+  const escrowInfo = await getEscrowInfo(client, contributions[0].campaign_id);
+
   if (showCampaignDetails && campaignDetails) {
     console.log('\nCampaign Details:');
     console.log('=================');
@@ -113,6 +167,19 @@ async function displayContributions(
     console.log(
       `Total Budget: ${await formatAmount(campaignDetails.totalBudget)}`
     );
+    if (escrowInfo) {
+      console.log(
+        `Total Released: ${await formatAmount(escrowInfo.totalReleased)}`
+      );
+      console.log(
+        `Remaining Budget: ${await formatAmount(
+          escrowInfo.totalLocked - escrowInfo.totalReleased
+        )}`
+      );
+      console.log(
+        `Reward per Contribution: ${await formatAmount(escrowInfo.unitReward)}`
+      );
+    }
     console.log(
       `Data Points: ${campaignDetails.minDataCount} - ${campaignDetails.maxDataCount}`
     );
@@ -131,6 +198,14 @@ async function displayContributions(
     console.log(`Contribution ID: ${contribution.contribution_id}`);
     console.log(`Campaign ID: ${contribution.campaign_id}`);
     console.log(`Contributor: ${contribution.contributor}`);
+
+    // Get and display contributor's reputation
+    const reputation = await getAddressReputation(
+      client,
+      contribution.contributor
+    );
+    console.log(`Contributor Reputation: ${reputation}`);
+
     console.log(`Data URL: ${contribution.data_url}`);
     console.log(
       `Data Hash: ${Buffer.from(contribution.data_hash).toString('hex')}`
@@ -159,6 +234,11 @@ async function displayContributions(
     console.log(
       `Reward Status: ${contribution.reward_released ? 'Released' : 'Pending'}`
     );
+    if (escrowInfo && contribution.reward_released) {
+      console.log(
+        `Reward Amount: ${await formatAmount(escrowInfo.unitReward)}`
+      );
+    }
   }
 }
 
@@ -192,6 +272,12 @@ async function main() {
       await displayContributions(client, contributions, false);
     }
 
+    // Get escrow info for total rewards calculation
+    const escrowInfo =
+      contributions.length > 0
+        ? await getEscrowInfo(client, contributions[0].campaign_id)
+        : null;
+
     // Show summary statistics
     console.log('\nSummary Statistics:');
     console.log('==================');
@@ -200,6 +286,13 @@ async function main() {
     const rewardedCount = contributions.filter((c) => c.reward_released).length;
     console.log(`Verified Contributions: ${verifiedCount}`);
     console.log(`Rewards Released: ${rewardedCount}`);
+
+    if (escrowInfo && rewardedCount > 0) {
+      const totalRewardsReleased = escrowInfo.unitReward * rewardedCount;
+      console.log(
+        `Total Rewards Released: ${await formatAmount(totalRewardsReleased)}`
+      );
+    }
 
     if (contributions.length > 0) {
       const verificationRate = (

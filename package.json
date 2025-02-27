@@ -5,7 +5,7 @@
   "type": "module",
   "main": "scripts/deploy.ts",
   "scripts": {
-    "deploy": "movement move publish  --named-addresses campaign_manager=default",
+    "publish": "movement move publish  --named-addresses campaign_manager=default",
     "compile": "movement move compile  --named-addresses campaign_manager=default"
   },
   "dependencies": {

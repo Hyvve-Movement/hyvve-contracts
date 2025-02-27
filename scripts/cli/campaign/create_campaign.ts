@@ -20,7 +20,7 @@ async function main() {
     );
 
     // Campaign parameters
-    const campaignId = 'test_campaign_1';
+    const campaignId = 'test_campaign_86';
     const title = 'Test Campaign';
     const description = 'A test campaign created via script';
     const dataRequirements = 'Test data requirements';
