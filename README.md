@@ -134,7 +134,7 @@ To see all available commands:
 hyvve-cli --help
 ```
 
-For more detailed information about the CLI, see the [CLI documentation](scripts/README.md) and the [CLI Cheat Sheet](scripts/CHEATSHEET.md).
+For more detailed information about the CLI, we added a comprehensive [CLI documentation](scripts/README.md) and the [CLI Cheat Sheet](scripts/CHEATSHEET.md).
 
 ### Campaign Management
 
@@ -164,26 +164,6 @@ For more detailed information about the CLI, see the [CLI documentation](scripts
 - Node.js and npm
 - TypeScript
 
-### Installation
-
-1. Clone the repository
-
-```bash
-git clone https://github.com/your-org/hyvve-contracts.git
-cd hyvve-contracts
-```
-
-2. Install dependencies
-
-```bash
-npm install
-```
-
-3. Compile the Move contracts
-
-```bash
-aptos move compile
-```
 
 ### Usage Examples
 
