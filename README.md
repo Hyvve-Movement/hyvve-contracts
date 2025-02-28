@@ -160,7 +160,7 @@ For more detailed information about the CLI, we added a comprehensive [CLI docum
 
 ### Prerequisites
 
-- Aptos CLI
+- Aptos CLI 3.5 / [Movement CLI](https://docs.movementnetwork.xyz/devs/movementcli)
 - Node.js and npm
 - TypeScript
 
