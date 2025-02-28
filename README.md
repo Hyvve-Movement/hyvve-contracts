@@ -2,6 +2,22 @@
 
 A decentralized marketplace for data collection and contribution built on the Aptos blockchain.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Environment Configuration](#environment-configuration)
+- [CLI Commands](#cli-commands)
+  - [Installation](#installation)
+  - [Troubleshooting Installation](#troubleshooting-installation)
+  - [Usage Examples](#usage-examples)
+  - [Campaign Management](#campaign-management)
+  - [Contribution Management](#contribution-management)
+- [Key Features](#key-features)
+- [License](#license)
+
 ## Overview
 
 Hyvve Data Marketplace is a platform that enables organizations to create data collection campaigns and incentivize contributors to submit high-quality data. The platform uses smart contracts to manage campaigns, contributions, escrow funds, and reputation.
@@ -39,6 +55,39 @@ Hyvve Data Marketplace is a platform that enables organizations to create data c
 - Node.js and npm
 - TypeScript
 
+### Environment Configuration
+
+The project uses environment variables for configuration. A sample `.env.example` file is provided:
+
+```
+CAMPAIGN_MANAGER_ADDRESS=0x1
+PRIVATE_KEY=0x1
+
+VERIFIER_ADDRESS=
+VERIFIER_PRIVATE_KEY=
+
+NETWORK=testnet
+RPC_URL=https://aptos.testnet.bardock.movementlabs.xyz/v1
+```
+
+To set up your environment:
+
+1. Copy the `.env.example` file to `.env`:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Update the values in `.env` with your specific configuration:
+   - `CAMPAIGN_MANAGER_ADDRESS`: Your account address for campaign management
+   - `PRIVATE_KEY`: Your account private key
+   - `VERIFIER_ADDRESS`: Address for the verifier account (optional)
+   - `VERIFIER_PRIVATE_KEY`: Private key for the verifier account (optional)
+   - `NETWORK`: Network to connect to (default: testnet)
+   - `RPC_URL`: URL for the RPC endpoint
+
+**Note**: Keep your private keys secure and never commit your `.env` file to version control.
+
 ## CLI Commands
 
 Hyvve Data Marketplace provides a centralized CLI tool for interacting with the smart contracts.
@@ -59,22 +108,28 @@ node scripts/setup/install-cli.js
 
 # Setup Movement CLI
 movement init --skip-faucet
+```
 
-You will be prompted to choose a network and an endpoint
+You will be prompted to choose a network and an endpoint:
+
 - Network: custom
 - Rest endpoint: https://aptos.testnet.bardock.movementlabs.xyz/v1
 
-# Once your .movement folder is created, you need to update .env
-CAMPAIGN_MANAGER_ADDRESS=<account address>
-PRIVATE_KEY=<account private key>
-
-# Register Verifier / Verifier Keys
-hyvve-cli verifier register_verifier
-hyvve-cli verifier register_verifier_key
+Once your `.movement` folder is created, you need to update `.env`:
 
 ```
+CAMPAIGN_MANAGER_ADDRESS=<account address>
+PRIVATE_KEY=<account private key>
+```
 
-#### Troubleshooting Installation
+Register Verifier and Verifier Keys:
+
+```bash
+hyvve-cli verifier register_verifier
+hyvve-cli verifier register_verifier_key
+```
+
+### Troubleshooting Installation
 
 If you encounter any issues during installation:
 
@@ -123,7 +178,7 @@ npm run cli -- campaign create_campaign
 npm run cli -- contribution submit_contribution
 ```
 
-#### Submitting a Contribution 
+#### Submitting a Contribution
 
 ```bash
 hyvve-cli contribution submit_contribution
@@ -162,8 +217,6 @@ For more detailed information about the CLI, we added a comprehensive [CLI docum
 3. **Reputation System**: Track and reward reliable contributors
 4. **Automated Verification**: Built-in verification mechanisms to ensure data quality
 5. **Platform Fee Structure**: Configurable fee structure for platform sustainability
-
-
 
 ## License
 
