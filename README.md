@@ -197,8 +197,6 @@ To see all available commands:
 hyvve-cli --help
 ```
 
-For more detailed information about the CLI, we added a comprehensive [CLI documentation](scripts/README.md) and the [CLI Cheat Sheet](scripts/CHEATSHEET.md).
-
 ### Campaign Management
 
 - `campaign create_campaign` - Create a new data collection campaign
@@ -213,7 +211,7 @@ For more detailed information about the CLI, we added a comprehensive [CLI docum
 
 ### CLI Cheatsheet
 
-For quick reference, we've created a comprehensive CLI cheatsheet that lists all available commands with their parameters and examples.
+For more detailed information about the CLI, we added a comprehensive [CLI documentation](scripts/README.md) and the [CLI Cheat Sheet](scripts/CHEATSHEET.md).
 
 The [CLI Cheatsheet](scripts/CHEATSHEET.md) includes:
 
