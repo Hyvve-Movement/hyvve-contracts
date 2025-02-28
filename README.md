@@ -70,6 +70,13 @@ npm install
 
 # Install the CLI globally
 node scripts/setup/install-cli.js
+
+# Setup Movement CLI
+movement init
+
+You'll be prompted to choose a network and an endpoint
+- Network: custom
+- Rest endpoint: https://aptos.testnet.bardock.movementlabs.xyz/v1
 ```
 
 #### Troubleshooting Installation
