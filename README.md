@@ -82,14 +82,15 @@ To set up your environment:
 2. Update the values in `.env` with your specific configuration:
    - `CAMPAIGN_MANAGER_ADDRESS`: Your account address for campaign management
    - `PRIVATE_KEY`: Your account private key
-   - `VERIFIER_ADDRESS`: Address for the verifier account (optional)
+   - `VERIFIER_ADDRESS`: Address for the verifier account (optional) 
    - `VERIFIER_PRIVATE_KEY`: Private key for the verifier account (optional)
    - `NETWORK`: Network to connect to (default: testnet)
    - `RPC_URL`: URL for the RPC endpoint
 
 **Note**: Keep your private keys secure and never commit your `.env` file to version control.
+**Note**: A new Verifier Address and private key will be generated when registering a new verifier
 
-## CLI Commands
+### CLI Commands
 
 Hyvve Data Marketplace provides a centralized CLI tool for interacting with the smart contracts.
 
@@ -221,6 +222,7 @@ The [CLI Cheatsheet](scripts/CHEATSHEET.md) includes:
 - Tips and best practices
 
 This is especially useful for developers who are already familiar with the platform and need a quick reference guide.
+
 
 ## Key Features
 
