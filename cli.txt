@@ -1,31 +1,33 @@
 # Campaign Management
-npx ts-node scripts/cli/campaign/create_campaign.ts
-npx ts-node scripts/cli/campaign/list_active_campaigns.ts
+hyvve-cli campaign create_campaign
+hyvve-cli campaign list_active_campaigns
+hyvve-cli campaign get_campaign_pubkey
+hyvve-cli campaign get_remaining_budget
 
 # Contribution Management
-npx ts-node scripts/cli/contribution/submit_contribution.ts <campaign_id> <data_url> <quality_score>
-npx ts-node scripts/cli/contribution/get_contributions.ts [campaign_id] [contributor_address]
+hyvve-cli contribution submit_contribution <campaign_id> <data_url> <quality_score>
+hyvve-cli contribution get_contributions [campaign_id] [contributor_address]
 
 # Campaign Statistics
-npx ts-node scripts/cli/stats/activity.ts [address]
-npx ts-node scripts/cli/stats/check_address_stats.ts [address]
+hyvve-cli stats activity [address]
+hyvve-cli stats check_address_stats [address]
 
 # Verifier Management
-npx ts-node scripts/cli/verifier/register_verifier.ts
-npx ts-node scripts/cli/verifier/register_verifier_key.ts
-npx ts-node scripts/cli/verifier/check_verifier.ts
+hyvve-cli verifier register_verifier
+hyvve-cli verifier register_verifier_key
+hyvve-cli verifier check_verifier
 
 # Setup and Initialization
-npx ts-node scripts/setup/initialize_verifier.ts
-npx ts-node scripts/setup/subscription.ts
+hyvve-cli setup initialize_verifier
+hyvve-cli setup subscription
 
 # Reputation Management
-npx ts-node scripts/cli/reputation/get_reputation.ts
+hyvve-cli reputation get_reputation
 
 # Profile Management
-npx ts-node scripts/cli/profile/manage_profile.ts set <username>
-npx ts-node scripts/cli/profile/manage_profile.ts edit <username>
-npx ts-node scripts/cli/profile/manage_profile.ts view [address]
+hyvve-cli profile manage_profile set <username>
+hyvve-cli profile manage_profile edit <username>
+hyvve-cli profile manage_profile view [address]
 
 # Notes:
 - Parameters in <angle_brackets> are required
@@ -35,3 +37,13 @@ npx ts-node scripts/cli/profile/manage_profile.ts view [address]
   * Provide campaign_id to view all contributions for a campaign
   * Provide contributor_address to view all contributions by an address
   * Provide both to filter contributions by campaign and contributor
+
+# Alternative Usage with npm:
+# You can also run the commands using npm:
+# npm run cli -- campaign create_campaign
+# npm run cli -- contribution submit_contribution <campaign_id> <data_url> <quality_score>
+
+# Getting Help:
+hyvve-cli --help                    # Show all available categories
+hyvve-cli campaign --help           # Show all campaign commands
+hyvve-cli contribution --help       # Show all contribution commands
