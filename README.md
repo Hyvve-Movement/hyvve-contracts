@@ -15,6 +15,7 @@ A decentralized marketplace for data collection and contribution built on the Ap
   - [Usage Examples](#usage-examples)
   - [Campaign Management](#campaign-management)
   - [Contribution Management](#contribution-management)
+  - [CLI Cheatsheet](#cli-cheatsheet)
 - [Key Features](#key-features)
 - [License](#license)
 
@@ -209,6 +210,19 @@ For more detailed information about the CLI, we added a comprehensive [CLI docum
 
 - `contribution submit_contribution` - Submit a new data contribution to a campaign
 - `contribution get_contributions` - View contributions for a campaign
+
+### CLI Cheatsheet
+
+For quick reference, we've created a comprehensive CLI cheatsheet that lists all available commands with their parameters and examples.
+
+The [CLI Cheatsheet](scripts/CHEATSHEET.md) includes:
+
+- All available command categories
+- Command syntax and parameters
+- Example usage for common scenarios
+- Tips and best practices
+
+This is especially useful for developers who are already familiar with the platform and need a quick reference guide.
 
 ## Key Features
 
