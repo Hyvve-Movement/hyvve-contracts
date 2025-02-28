@@ -114,7 +114,7 @@ npm run cli -- campaign create_campaign
 npm run cli -- contribution submit_contribution
 ```
 
-#### Submitting a Contribution
+#### Submitting a Contribution 
 
 ```bash
 hyvve-cli contribution submit_contribution
