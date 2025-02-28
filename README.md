@@ -31,27 +31,13 @@ Hyvve Data Marketplace is a platform that enables organizations to create data c
 └── Move.toml               # Move package configuration
 ```
 
-## Smart Contracts
+## Getting Started
 
-### Campaign Manager
+### Prerequisites
 
-Handles the creation, management, and lifecycle of data collection campaigns. Campaign creators can define requirements, set budgets, and specify reward structures.
-
-### Contribution Manager
-
-Manages the submission and verification of data contributions. Contributors can submit data to active campaigns and receive rewards based on quality.
-
-### Escrow Manager
-
-Secures funds for campaigns and handles the distribution of rewards. Implements a secure escrow system with platform fees and automatic reward distribution.
-
-### Reputation System
-
-Tracks contributor reputation based on the quality and quantity of their contributions. Higher reputation can lead to better opportunities and rewards.
-
-### Verifier
-
-Implements verification logic to ensure data quality. Supports various verification methods and quality scoring.
+- Aptos CLI 3.5 / [Movement CLI](https://docs.movementnetwork.xyz/devs/movementcli)
+- Node.js and npm
+- TypeScript
 
 ## CLI Commands
 
@@ -104,7 +90,7 @@ If you encounter any issues during installation:
    npm run cli -- <category> <command>
    ```
 
-### Usage
+### Usage Examples
 
 Once installed, you can use the CLI with the following syntax:
 
@@ -126,6 +112,18 @@ hyvve-cli contribution submit_contribution
 # Using npm run
 npm run cli -- campaign create_campaign
 npm run cli -- contribution submit_contribution
+```
+
+#### Submitting a Contribution
+
+```bash
+hyvve-cli contribution submit_contribution
+```
+
+#### Checking Campaign Status
+
+```bash
+hyvve-cli campaign list_active_campaigns
 ```
 
 To see all available commands:
@@ -156,34 +154,7 @@ For more detailed information about the CLI, we added a comprehensive [CLI docum
 4. **Automated Verification**: Built-in verification mechanisms to ensure data quality
 5. **Platform Fee Structure**: Configurable fee structure for platform sustainability
 
-## Getting Started
 
-### Prerequisites
-
-- Aptos CLI 3.5 / [Movement CLI](https://docs.movementnetwork.xyz/devs/movementcli)
-- Node.js and npm
-- TypeScript
-
-
-### Usage Examples
-
-#### Creating a Campaign
-
-```bash
-hyvve-cli campaign create_campaign
-```
-
-#### Submitting a Contribution
-
-```bash
-hyvve-cli contribution submit_contribution
-```
-
-#### Checking Campaign Status
-
-```bash
-hyvve-cli campaign list_active_campaigns
-```
 
 ## License
 
