@@ -58,11 +58,20 @@ npm install
 node scripts/setup/install-cli.js
 
 # Setup Movement CLI
-movement init
+movement init --skip-faucet
 
-You'll be prompted to choose a network and an endpoint
+You will be prompted to choose a network and an endpoint
 - Network: custom
 - Rest endpoint: https://aptos.testnet.bardock.movementlabs.xyz/v1
+
+# Once your .movement folder is created, you need to update .env
+CAMPAIGN_MANAGER_ADDRESS=<account address>
+PRIVATE_KEY=<account private key>
+
+# Register Verifier / Verifier Keys
+hyvve-cli verifier register_verifier
+hyvve-cli verifier register_verifier_key
+
 ```
 
 #### Troubleshooting Installation
