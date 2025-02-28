@@ -1,23 +1,21 @@
 import { AptosClient, AptosAccount, TxnBuilderTypes, HexString } from 'aptos';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const CAMPAIGN_MANAGER_ADDRESS = process.env.CAMPAIGN_MANAGER_ADDRESS || '';
-const NODE_URL = process.env.RPC_URL || '';
+import { CONFIG, validateConfig } from '../../config';
+import {
+  getAptosClient,
+  getAccount,
+  submitTransaction,
+} from '../../utils/common';
 
 async function main() {
   try {
+    // Validate configuration
+    validateConfig();
+
     // Initialize Aptos client
-    const client = new AptosClient(NODE_URL);
+    const client = await getAptosClient();
 
     // Initialize account from private key
-    if (!process.env.PRIVATE_KEY) {
-      throw new Error('Private key not found in .env file');
-    }
-    const account = new AptosAccount(
-      HexString.ensure(process.env.PRIVATE_KEY).toUint8Array()
-    );
+    const account = await getAccount();
 
     // Campaign parameters
     const campaignId = 'test_campaign_86';
@@ -37,7 +35,7 @@ async function main() {
     // Create payload
     const payload = {
       type: 'entry_function_payload',
-      function: `${CAMPAIGN_MANAGER_ADDRESS}::campaign::create_campaign`,
+      function: `${CONFIG.CAMPAIGN_MANAGER_ADDRESS}::campaign::create_campaign`,
       type_arguments: ['0x1::aptos_coin::AptosCoin'],
       arguments: [
         campaignId,
@@ -57,22 +55,11 @@ async function main() {
     };
 
     // Submit transaction
-    const txnRequest = await client.generateTransaction(
-      account.address(),
-      payload
-    );
-    const signedTxn = await client.signTransaction(account, txnRequest);
-    const txnResult = await client.submitTransaction(signedTxn);
+    const txnHash = await submitTransaction(client, account, payload);
 
-    console.log('Transaction submitted!');
-    console.log('Transaction hash:', txnResult.hash);
-
-    // Wait for transaction
-    await client.waitForTransaction(txnResult.hash);
-    console.log('Transaction successful!');
     console.log(
       'View on explorer:',
-      `https://explorer.aptoslabs.com/txn/${txnResult.hash}?network=testnet`
+      `https://explorer.aptoslabs.com/txn/${txnHash}?network=testnet`
     );
   } catch (error) {
     console.error('Error creating campaign:', error);
@@ -80,4 +67,10 @@ async function main() {
   }
 }
 
-main();
+// If the file is run directly
+if (require.main === module) {
+  main();
+}
+
+// Export for CLI integration
+export default main;

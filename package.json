@@ -1,12 +1,19 @@
 {
-  "name": "ai-prompt-marketplace",
+  "name": "hyvve-data-marketplace",
   "version": "1.0.0",
-  "description": "AI Prompt Marketplace Smart Contract on Movement",
+  "description": "Hyvve Data Marketplace Smart Contract on Movement",
   "type": "module",
   "main": "scripts/deploy.ts",
+  "bin": {
+    "hyvve-cli": "./scripts/simple-cli.js"
+  },
   "scripts": {
     "publish": "movement move publish  --named-addresses campaign_manager=default",
-    "compile": "movement move compile  --named-addresses campaign_manager=default"
+    "compile": "movement move compile  --named-addresses campaign_manager=default",
+    "cli": "node scripts/simple-cli.js",
+    "postinstall": "echo 'To install the CLI globally, run: node scripts/setup/install-cli.js'",
+    "setup-cli": "node scripts/setup/install-cli.js",
+    "uninstall-cli": "node scripts/setup/uninstall-cli.js"
   },
   "dependencies": {
     "aptos": "^1.21.0"
@@ -23,10 +30,10 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Hive-Movement/hive-contracts.git"
+    "url": "git+https://github.com/Hyvve-Movement/hyvve-contracts.git"
   },
   "bugs": {
-    "url": "https://github.com/Hive-Movement/hive-contracts/issues"
+    "url": "https://github.com/Hyvve-Movement/hyvve-contracts/issues"
   },
-  "homepage": "https://github.com/Hive-Movement/hive-contracts#readme"
+  "homepage": "https://github.com/Hyvve-Movement/hyvve-contracts#readme"
 }
