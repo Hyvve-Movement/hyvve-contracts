@@ -32,13 +32,46 @@ cd hyvve-contracts
 npm install
 
 # Install the CLI globally
-npm link
+npm run setup-cli
+# or
+node scripts/setup/install-cli.js
 ```
 
-Alternatively, you can run the installation script:
+#### Troubleshooting Installation
+
+If you encounter any issues during installation:
+
+1. **Existing Installation**: If you see an error about an existing file, you can try:
+   ```bash
+   # Remove existing symlink
+   rm $(which hyvve-cli)
+   
+   # Then run the installation script again
+   npm run setup-cli
+   ```
+
+2. **Permission Issues**: If you encounter permission errors:
+   ```bash
+   sudo npm run setup-cli
+   # or
+   sudo node scripts/setup/install-cli.js
+   ```
+
+3. **Alternative Usage**: You can always use the CLI without global installation:
+   ```bash
+   npm run cli -- <category> <command>
+   ```
+
+### Uninstallation
+
+If you need to uninstall the CLI:
 
 ```bash
-node scripts/setup/install-cli.js
+# Using the npm script
+npm run uninstall-cli
+
+# Or directly
+node scripts/setup/uninstall-cli.js
 ```
 
 ## Usage
@@ -46,12 +79,10 @@ node scripts/setup/install-cli.js
 Once installed, you can use the CLI with the following syntax:
 
 ```bash
+# Global command
 hyvve-cli <category> <command>
-```
 
-If you prefer not to install it globally, you can run it using npm:
-
-```bash
+# Using npm run
 npm run cli -- <category> <command>
 ```
 

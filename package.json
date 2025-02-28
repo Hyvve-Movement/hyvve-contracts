@@ -10,7 +10,10 @@
   "scripts": {
     "publish": "movement move publish  --named-addresses campaign_manager=default",
     "compile": "movement move compile  --named-addresses campaign_manager=default",
-    "cli": "node scripts/simple-cli.js"
+    "cli": "node scripts/simple-cli.js",
+    "postinstall": "echo 'To install the CLI globally, run: node scripts/setup/install-cli.js'",
+    "setup-cli": "node scripts/setup/install-cli.js",
+    "uninstall-cli": "node scripts/setup/uninstall-cli.js"
   },
   "dependencies": {
     "aptos": "^1.21.0"

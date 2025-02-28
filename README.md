@@ -72,19 +72,53 @@ npm install
 node scripts/setup/install-cli.js
 ```
 
+#### Troubleshooting Installation
+
+If you encounter any issues during installation:
+
+1. **Existing Installation**: If you see an error about an existing file, you can try:
+
+   ```bash
+   # Remove existing symlink
+   rm $(which hyvve-cli)
+
+   # Then run the installation script again
+   node scripts/setup/install-cli.js
+   ```
+
+2. **Permission Issues**: If you encounter permission errors:
+
+   ```bash
+   sudo node scripts/setup/install-cli.js
+   ```
+
+3. **Alternative Usage**: You can always use the CLI without global installation:
+   ```bash
+   npm run cli -- <category> <command>
+   ```
+
 ### Usage
 
 Once installed, you can use the CLI with the following syntax:
 
 ```bash
+# Using the global command
 hyvve-cli <category> <command>
+
+# Alternative: Using npm run
+npm run cli -- <category> <command>
 ```
 
 For example:
 
 ```bash
+# Using global command
 hyvve-cli campaign create_campaign
 hyvve-cli contribution submit_contribution
+
+# Using npm run
+npm run cli -- campaign create_campaign
+npm run cli -- contribution submit_contribution
 ```
 
 To see all available commands:
@@ -167,3 +201,7 @@ hyvve-cli campaign list_active_campaigns
 ## License
 
 [MIT License](LICENSE)
+
+```
+
+```

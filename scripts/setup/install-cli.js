@@ -26,16 +26,39 @@ try {
   console.warn('Warning: Could not make CLI script executable:', error.message);
 }
 
+// Try to unlink any existing CLI first to avoid conflicts
+try {
+  console.log('Checking for existing CLI installations...');
+  execSync('npm unlink -g hyvve-cli', { stdio: 'pipe' });
+  console.log('Unlinked existing CLI installation');
+} catch (error) {
+  // It's okay if this fails - it might not be installed yet
+  console.log('No existing CLI installation found or unable to unlink');
+}
+
 // Create symlink to make the CLI globally available
 try {
   console.log('Creating symlink for global access...');
-  execSync('npm link', { cwd: rootDir, stdio: 'inherit' });
+
+  // Use --force flag to overwrite any existing symlinks
+  execSync('npm link --force', { cwd: rootDir, stdio: 'inherit' });
   console.log('Symlink created successfully!');
 } catch (error) {
   console.error('Failed to create symlink:', error.message);
+
+  // Provide more detailed troubleshooting steps
+  console.log('\nTroubleshooting steps:');
   console.log(
-    'You may need to run this script with sudo or administrator privileges.'
+    '1. If you see an EEXIST error, try manually removing the symlink:'
   );
+  console.log('   rm $(which hyvve-cli)');
+  console.log('2. Then run this script again');
+  console.log('3. Or you may need to run with sudo:');
+  console.log('   sudo node scripts/setup/install-cli.js');
+  console.log('\nAlternative installation:');
+  console.log('You can also use the CLI without global installation:');
+  console.log('npm run cli -- <category> <command>');
+
   process.exit(1);
 }
 
@@ -46,3 +69,5 @@ console.log('\nFor example:');
 console.log('  hyvve-cli campaign list_active_campaigns');
 console.log('\nTo see all available commands, run:');
 console.log('  hyvve-cli --help');
+console.log('\nAlternative usage:');
+console.log('  npm run cli -- <category> <command>');
