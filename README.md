@@ -1,6 +1,6 @@
 # Hyvve Data Marketplace - Smart Contracts
 
-A decentralized marketplace for data collection and contribution built on the Aptos blockchain.
+A decentralized marketplace for data collection and contribution built on the Movement Network.
 
 ## Table of Contents
 
